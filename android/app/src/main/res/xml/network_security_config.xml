@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- IPTV providers commonly serve over plain http, so cleartext is allowed.
+     User-added CAs are NOT trusted; self-signed provider certificates are
+     handled per provider in the app (brief section 5.9). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

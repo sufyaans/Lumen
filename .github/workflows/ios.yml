@@ -1,0 +1,35 @@
+name: iOS (unsigned, for sideloading)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    # macOS minutes count 10x against private-repo allowances. Manual and
+    # tag triggers only, so normal pushes don't spend them.
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build without code signing
+        run: flutter build ios --release --no-codesign
+      - name: Package unsigned IPA
+        run: |
+          APP=$(find build/ios -type d -name 'Runner.app' -path '*iphoneos*' | head -n 1)
+          if [ -z "$APP" ]; then echo "Runner.app not found"; find build/ios -maxdepth 3; exit 1; fi
+          echo "Using $APP"
+          rm -rf Payload && mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry Lumen-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lumen-ios-unsigned
+          path: Lumen-unsigned.ipa
+          if-no-files-found: error
