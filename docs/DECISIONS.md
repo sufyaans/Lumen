@@ -80,3 +80,35 @@ Scenarios 11, 22, 23, 24, 25 and 26 have a player or UI half: the playback banne
 
 ### D23. Mock server lives in `tool/`
 `tool/mock_server/mock_xtream_server.dart` is shared by the tests and `dart run tool/mock_server/main.dart` (port 25461, `user` / `pass`). The TLS test uses a test-only self-signed certificate in `test/fixtures/tls/`.
+
+## Phase 2
+
+### D24. SQLite comes from `sqlite3` 3.x build hooks, not `sqlite3_flutter_libs`
+`sqlite3_flutter_libs` is end-of-life (`0.6.0+eol`). `sqlite3` 3.x builds and bundles SQLite itself through Dart native-asset hooks, with FTS5 included. A debug APK builds with it, and the tests run against the same library on Windows.
+
+### D25. Parse and write in one isolate
+Big lists are downloaded on the main isolate as raw bytes, which costs no per-item work. They are then handed to `computeWithDatabase`, a short-lived isolate attached to the same database, which decodes, parses and upserts them in 1,000-row batches. The parsed objects never exist on the UI isolate (brief §4). The isolate entry points are top-level functions, so the closures capture only plain values.
+
+### D26. The database runs in a multi-client drift isolate
+`AppDatabase.open()` uses drift_flutter's `shareAcrossIsolates`. With `NativeDatabase.createInBackground`, which is single-client, a sync isolate disconnecting can shut the server down. A test caught that; tests now use a multi-client `DriftIsolate` too (`test/helpers/test_db.dart`).
+
+### D27. Stale rows and user data
+Every sync writes a `syncToken`, and rows with an older token are deleted only when the fetch was complete. A per-category fallback with failed categories keeps the old rows. Favourites, My list, progress and recents are separate tables keyed by provider id plus remote id, with no foreign keys, so refreshes never touch them.
+
+### D28. M3U ids and credentials
+M3U entries use `tvg-id` as their id when it's present and unique, otherwise `group|name`. That keeps favourites stable when stream URLs carry rotating tokens. Stored entry URLs have the playlist link's own `username`/`password` values replaced with placeholders (`SecretTemplate`), and only in the path and query, never the host. They're filled back in from secure storage at play time. Entries from a picked file are stored as they are, since the file is already on the device.
+
+### D29. "Trending" and "Popular" without popularity data
+Xtream doesn't expose popularity. "Trending movies" shows the newest additions (`added`) and "Popular series" the most recently updated (`last_modified`). The row titles follow the brief.
+
+### D30. Refresh policy
+On launch, the catalogue refreshes when the last sync is older than 6 hours. Daily means older than 24 hours. Manual never refreshes automatically. Cached data always shows first, and the refresh runs in the background with a thin progress bar.
+
+### D31. Offline
+`connectivity_plus` is only a hint. The banner reads "Offline, showing saved data" and appears when cached data exists and either connectivity reports none or the last refresh failed as unreachable (offline, DNS or timeout/refused). When connectivity comes back after an unreachable failure, the sync controller retries automatically. A Retry button is also offered.
+
+### D32. Guide (XMLTV)
+The guide is parsed with the `xml` package's event iterator inside the sync isolate, with `.xml.gz` detected by its magic bytes. Only channels in the lineup and programmes overlapping now −2 h … +48 h are kept, and the provider's previous guide is replaced. Xtream providers use `xmltv.php`. M3U providers use `url-tvg`/`x-tvg-url`, which is saved automatically. The `get_short_epg` fallback for visible channels is wired in Phase 3, alongside the guide UI that decides which channels are visible.
+
+### D33. Adult and kids detection
+Detection matches keywords on word boundaries, so "Essex" isn't adult. Adult categories are hidden by default (`AppSettings.hideAdult`; the PIN gate is Phase 3 UI). Kids profiles hide adult content and show only categories whose names look kids-appropriate.

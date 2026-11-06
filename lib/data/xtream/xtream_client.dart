@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:typed_data';
 
 import '../../core/network/connection_error.dart';
 import '../../core/network/network_client.dart';
+import '../../core/network/redaction.dart';
 import '../../core/network/retry.dart';
 import '../../core/network/user_agents.dart';
 import 'server_endpoint.dart';
@@ -35,6 +37,22 @@ class RequestPool {
       if (_waiting.isNotEmpty) _waiting.removeFirst().complete();
     }
   }
+}
+
+/// Bodies for one list action. [complete] is false when some categories
+/// failed, in which case stale rows must not be deleted.
+class ListBodies {
+  ListBodies(
+    this.bodies, {
+    required this.perCategory,
+    this.failedCategories = 0,
+  });
+
+  final List<Uint8List> bodies;
+  final bool perCategory;
+  final int failedCategories;
+
+  bool get complete => failedCategories == 0;
 }
 
 /// Progress for a catalogue download.
@@ -101,6 +119,20 @@ class XtreamClient {
       () => _get(urls.api(action, params), cancel: cancel),
     );
     return _decode(res);
+  }
+
+  /// Login call (no action): fresh user and server info. Throws
+  /// [ConnectionError] (auth_rejected when the body has no user_info).
+  Future<AccountInfo> account({CancelSignal? cancel}) async {
+    final res = await _guard(() => _get(urls.api(), cancel: cancel));
+    final info = AccountInfo.parse(_decode(res));
+    if (info == null || info.user.auth == false) {
+      throw const ConnectionError(
+        ConnectionErrorKind.authRejected,
+        details: 'login rejected on refresh',
+      );
+    }
+    return info;
   }
 
   Future<List<XCategory>> liveCategories({CancelSignal? cancel}) async =>
@@ -191,6 +223,43 @@ class XtreamClient {
     required CancelSignal? cancel,
     required Future<List<XCategory>> Function() categories,
   }) async {
+    final bodies = await listBodies(
+      action,
+      onProgress: onProgress,
+      cancel: cancel,
+      categories: categories,
+    );
+    final seen = <int>{};
+    final out = <T>[];
+    for (final body in bodies.bodies) {
+      final list = await parseListInIsolate(body, parse);
+      if (list == null) {
+        if (!bodies.perCategory) {
+          throw ConnectionError(
+            ConnectionErrorKind.malformed,
+            details: '$action returned non-JSON',
+          );
+        }
+        continue;
+      }
+      for (final item in list) {
+        if (seen.add(idOf(item))) out.add(item);
+      }
+    }
+    return out;
+  }
+
+  /// Raw response bodies for a list action, so a sync isolate can parse
+  /// and write them without the data ever touching the UI isolate.
+  ///
+  /// Tries the whole list first; on timeout, failure or a non-JSON body,
+  /// fetches per category (at most 2 concurrent, paced).
+  Future<ListBodies> listBodies(
+    String action, {
+    ListProgress? onProgress,
+    CancelSignal? cancel,
+    required Future<List<XCategory>> Function() categories,
+  }) async {
     try {
       final res = await _guard(
         () => pool.run(
@@ -204,21 +273,19 @@ class XtreamClient {
         ),
       );
       _checkStatus(res);
-      final parsed = await parseListInIsolate(res.bytes, parse);
-      if (parsed != null) return parsed;
-      throw ConnectionError(
-        ConnectionErrorKind.malformed,
-        details: '$action returned non-JSON',
-      );
+      if (_looksLikeJsonList(res.bytes)) {
+        return ListBodies([res.bytes], perCategory: false);
+      }
+      NetLog.w('$action: full list was not JSON, trying per category');
     } on ConnectionError catch (e) {
       if (cancel?.isCancelled ?? false) rethrow;
       // Auth and account problems won't be fixed by smaller requests.
       if (_conclusive(e.kind)) rethrow;
+      NetLog.w('$action: full list failed (${e.kind.name}), per category');
     }
 
     final cats = await categories();
-    final seen = <int>{};
-    final out = <T>[];
+    final bodies = <Uint8List>[];
     final fallbackPool = RequestPool(2);
     var failures = 0;
     await Future.wait([
@@ -234,10 +301,7 @@ class XtreamClient {
                   _get(urls.api(action, {'category_id': c.id}), cancel: cancel),
             );
             _checkStatus(res);
-            final list = await parseListInIsolate(res.bytes, parse) ?? [];
-            for (final item in list) {
-              if (seen.add(idOf(item))) out.add(item);
-            }
+            bodies.add(res.bytes);
           } on ConnectionError {
             failures++;
           }
@@ -249,13 +313,24 @@ class XtreamClient {
         details: 'cancelled',
       );
     }
-    if (out.isEmpty && failures > 0) {
+    if (bodies.isEmpty && failures > 0) {
       throw ConnectionError(
         ConnectionErrorKind.timeoutOrRefused,
         details: '$action failed in full and per category ($failures)',
       );
     }
-    return out;
+    return ListBodies(bodies, perCategory: true, failedCategories: failures);
+  }
+
+  static bool _looksLikeJsonList(Uint8List b) {
+    for (var i = 0; i < b.length && i < 4096; i++) {
+      final c = b[i];
+      // Skip BOM bytes and whitespace.
+      if (c == 0xEF || c == 0xBB || c == 0xBF || c <= 0x20) continue;
+      // `[`, `{`, or text junk (PHP warnings) the tolerant decoder handles.
+      return c != 0x3C; // '<' = HTML page
+    }
+    return false;
   }
 
   static bool _conclusive(ConnectionErrorKind k) =>

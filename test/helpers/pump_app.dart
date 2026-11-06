@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumen/app/app.dart';
 import 'package:lumen/app/app_config.dart';
+import 'package:lumen/app/data_providers.dart';
 import 'package:lumen/core/platform/form_factor.dart';
 import 'package:lumen/dev/preview_catalog.dart';
 import 'package:lumen/domain/browse_catalog.dart';
@@ -52,6 +53,9 @@ Future<ProviderContainer> pumpLumen(
       deviceProfileProvider.overrideWithValue(
         DeviceProfile(formFactor: formFactor, liteMode: false),
       ),
+      // No database, provider list or connectivity plugin in widget tests.
+      providersListProvider.overrideWith((ref) => Stream.value(const [])),
+      connectivityOnlineProvider.overrideWith((ref) => Stream.value(true)),
       browseCatalogProvider.overrideWithValue(catalog ?? buildPreviewCatalog()),
     ],
   );

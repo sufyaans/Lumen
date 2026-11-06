@@ -71,3 +71,20 @@ Test files:
 | M3U: name falls back to `tvg-name` then URL; `#EXTGRP`; `#KODIPROP` headers; `url|User-Agent=` headers; options before `#EXTINF` | `m3u_parser.dart` | M |
 | M3U: UTF-16 with BOM | `decodePlaylistText` | — (simple path, untested) |
 | M3U: playlist link returning a web page → html_response | `loadM3uLink` | — |
+
+## Phase 2 additions (test file `test/db/catalog_sync_test.dart` = **D**, `test/db/app_state_test.dart` = **A**)
+
+| Behaviour | Where | Test |
+|---|---|---|
+| Sync writes channels, movies, series, categories, search index and guide; no secrets in DB | `CatalogSync`, `sync_writers.dart` | D "Xtream sync…" |
+| Saved working profile stops working → automatic re-probe, new agent saved | `CatalogSync._syncXtream` | D "saved profile stops working" |
+| Refresh keeps favourites / My list / progress; stale rows removed | `syncToken` + separate user tables | D "refresh keeps…" |
+| Failed refresh keeps the cached catalogue | `CatalogSync` | D "a failed refresh…" |
+| Missing password → re-prompt state, provider kept (scenario 25, data half) | `SyncResult.needsPassword` | D "missing password…" |
+| Expired on refresh → error, cache kept | `CatalogSync` | D "expired account…" |
+| M3U link credentials replaced by placeholders in stored URLs; `url-tvg` saved | `SecretTemplate`, `writeM3u` | D "M3U link…" |
+| XMLTV window, lineup filter, gzip, first title only, CDATA | `xmltv.dart` | D "guide keeps…" |
+| 60 000 channels synced without stalling the UI isolate; paged reads | `computeWithDatabase` | D "60 000 channels…" |
+| Network lost → banner over cached data → automatic retry on reconnect (scenario 24, data half) | `SyncController`, `offlineBannerProvider` | A "offline banner…" |
+| Snapshot updates live when user data changes | `catalogSnapshotProvider` | A "first provider becomes active…" |
+| Kids profile filtering | `ContentFilter`, `CatalogRepository` | A "kids profile…", D |

@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'app/data_providers.dart';
 import 'core/platform/form_factor.dart';
 import 'core/platform/orientation.dart';
+import 'data/db/app_database.dart';
 import 'features/settings/app_settings.dart';
 
 Future<void> main() async {
@@ -26,6 +28,7 @@ Future<void> main() async {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         deviceProfileProvider.overrideWithValue(device),
+        appDatabaseProvider.overrideWithValue(AppDatabase.open()),
       ],
       child: const LumenApp(),
     ),

@@ -62,6 +62,16 @@ class MockProvider {
   int liveStreamCount = 30;
   int categoryCount = 3;
 
+  /// Optional category names (index 0 = category 1); default "Category N".
+  List<String> categoryNames = const [];
+
+  /// Serve `xmltv.php` (gzip-compressed when [xmltvGzip]).
+  bool xmltv = true;
+  bool xmltvGzip = false;
+
+  /// Remove the last N live streams from responses (to test stale rows).
+  int dropLastStreams = 0;
+
   /// Delay before `get_live_streams` (all at once) starts sending.
   Duration liveStreamsDelay = Duration.zero;
 
@@ -187,6 +197,12 @@ Future<Response> _route(Request r, MockProvider p) async {
       (segs[0] == 'live' || segs[0] == 'movie' || segs[0] == 'series')) {
     return _stream(r, p, segs);
   }
+  if (path.endsWith('xmltv.php') && p.xmltv) {
+    if (query['username'] != p.username || query['password'] != p.password) {
+      return Response.forbidden('bad credentials');
+    }
+    return _xmltv(p);
+  }
   if (path.endsWith('player_api.php')) {
     if (p.portalOnly) return Response.notFound('Not found');
     return _api(r, p, query);
@@ -278,7 +294,9 @@ Future<Response> _api(Request r, MockProvider p, Map<String, String> q) async {
         for (var i = 1; i <= p.categoryCount; i++)
           {
             'category_id': _num(p, i),
-            'category_name': 'Category $i',
+            'category_name': i <= p.categoryNames.length
+                ? p.categoryNames[i - 1]
+                : 'Category $i',
             'parent_id': 0,
           },
       ]);
@@ -363,7 +381,7 @@ Future<Response> _liveStreams(MockProvider p, String? categoryId) async {
     }
   }
   final cat = categoryId == null ? null : int.tryParse(categoryId);
-  final count = p.liveStreamCount;
+  final count = p.liveStreamCount - p.dropLastStreams;
   final padTo = p.liveStreamsTargetBytes;
   final pad = padTo == null
       ? ''
@@ -423,4 +441,41 @@ Response _body(MockProvider p, String text, {bool chunked = false}) {
   }
 
   return Response.ok(chunks(), headers: headers);
+}
+
+Response _xmltv(MockProvider p) {
+  String fmt(DateTime t) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    final u = t.toUtc();
+    return '${u.year}${two(u.month)}${two(u.day)}${two(u.hour)}${two(u.minute)}00 +0000';
+  }
+
+  final now = DateTime.now().toUtc();
+  final start = DateTime.utc(now.year, now.month, now.day, now.hour);
+  final b = StringBuffer()
+    ..writeln('<?xml version="1.0" encoding="UTF-8"?>')
+    ..writeln('<tv>');
+  for (var i = 1; i <= p.liveStreamCount; i++) {
+    b.writeln(
+      '<channel id="ch$i"><display-name>Channel $i</display-name></channel>',
+    );
+  }
+  for (var i = 1; i <= p.liveStreamCount; i++) {
+    // From 5 h ago to 3 days ahead, hourly: the importer keeps a window.
+    for (var h = -5; h < 72; h++) {
+      final s = start.add(Duration(hours: h));
+      b.writeln(
+        '<programme start="${fmt(s)}" stop="${fmt(s.add(const Duration(hours: 1)))}" channel="ch$i">'
+        '<title lang="en">Show $h &amp; friends</title><title lang="fr">Ignored</title>'
+        '<desc><![CDATA[Episode <b>$h</b>]]></desc></programme>',
+      );
+    }
+  }
+  b.writeln(
+    '<programme start="${fmt(start)}" stop="${fmt(start.add(const Duration(hours: 1)))}" channel="not-in-lineup"><title>X</title></programme>',
+  );
+  b.write('</tv>');
+  var bytes = Uint8List.fromList(utf8.encode(b.toString()));
+  if (p.xmltvGzip) bytes = Uint8List.fromList(GZipCodec().encode(bytes));
+  return Response.ok(bytes, headers: {'content-type': 'application/xml'});
 }

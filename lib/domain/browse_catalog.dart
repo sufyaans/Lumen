@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/data_providers.dart';
 import '../dev/preview_catalog.dart';
 import 'media_summary.dart';
 
@@ -56,10 +57,19 @@ class BrowseCatalog {
   }
 }
 
-/// Release builds ship no content of any kind (brief section 1), so the
-/// catalogue is empty until a provider is added. Debug builds show a
-/// generated preview so layout and D-pad focus can be checked without a
-/// provider. Tests override this provider directly.
-final browseCatalogProvider = Provider<BrowseCatalog>(
-  (ref) => kDebugMode ? buildPreviewCatalog() : BrowseCatalog.empty,
-);
+/// What the browsing screens show.
+///
+/// * A provider is active: the database snapshot (stale-while-revalidate;
+///   the previous snapshot stays visible while a new one loads).
+/// * No provider: nothing in release builds (brief 1: no bundled content);
+///   generated preview titles in debug builds, so layout and D-pad focus
+///   can be checked without a provider.
+///
+/// Tests override this provider directly.
+final browseCatalogProvider = Provider<BrowseCatalog>((ref) {
+  final providerId = ref.watch(activeProviderIdProvider);
+  if (providerId == null) {
+    return kDebugMode ? buildPreviewCatalog() : BrowseCatalog.empty;
+  }
+  return ref.watch(catalogSnapshotProvider).value ?? BrowseCatalog.empty;
+});

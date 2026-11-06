@@ -6,14 +6,29 @@ import '../core/focus/tv_safe_area.dart';
 import '../core/platform/form_factor.dart';
 import '../features/settings/app_settings.dart';
 import 'app_config.dart';
+import 'data_providers.dart';
 import 'router.dart';
 import 'theme.dart';
 
-class LumenApp extends ConsumerWidget {
+class LumenApp extends ConsumerStatefulWidget {
   const LumenApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LumenApp> createState() => _LumenAppState();
+}
+
+class _LumenAppState extends ConsumerState<LumenApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Cached data shows immediately; refresh in the background when due.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(syncControllerProvider.notifier).refreshIfDue();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final device = ref.watch(deviceProfileProvider);
     final themeMode = ref.watch(appSettingsProvider.select((s) => s.themeMode));
     final router = ref.watch(routerProvider);

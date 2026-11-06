@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../app/app_config.dart';
+import '../../app/data_providers.dart';
 import '../../app/theme.dart';
 import '../../core/focus/focus_memory.dart';
 import '../../core/platform/form_factor.dart';
@@ -51,7 +52,17 @@ class AppShell extends ConsumerWidget {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _select(0);
       },
-      child: FocusMemory(debugLabel: 'branch-$index', child: navigationShell),
+      child: Column(
+        children: [
+          const _StatusBanners(),
+          Expanded(
+            child: FocusMemory(
+              debugLabel: 'branch-$index',
+              child: navigationShell,
+            ),
+          ),
+        ],
+      ),
     );
 
     if (ff == FormFactor.phone) {
@@ -217,6 +228,63 @@ class _TopBarState extends State<_TopBar> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Offline, showing saved data" banner and a thin progress bar while the
+/// catalogue refreshes in the background (brief 5.9, 6).
+class _StatusBanners extends ConsumerWidget {
+  const _StatusBanners();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final offline = ref.watch(offlineBannerProvider);
+    final sync = ref.watch(syncControllerProvider);
+    final c = LumenColors.of(context);
+    final t = Theme.of(context).textTheme;
+    final p = sync.progress;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (offline)
+          Container(
+            width: double.infinity,
+            color: c.surfaceHigh,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off, size: 18, color: c.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Offline, showing saved data',
+                    style: t.labelMedium,
+                  ),
+                ),
+                if (!sync.running && sync.providerId != null)
+                  PillButton(
+                    label: 'Retry',
+                    onPressed: () => ref
+                        .read(syncControllerProvider.notifier)
+                        .refresh(sync.providerId!),
+                  ),
+              ],
+            ),
+          ),
+        if (sync.running)
+          Semantics(
+            label: 'Updating catalogue',
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: c.accent,
+              backgroundColor: Colors.transparent,
+              value: (p?.total != null && p!.total! > 0)
+                  ? (p.received ?? 0) / p.total!
+                  : null,
+            ),
+          ),
+      ],
     );
   }
 }
