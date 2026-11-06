@@ -144,8 +144,9 @@ class FakePlayerData implements PlayerData {
   @override
   Future<PlayableItem?> resolve(PlayRequest r) async {
     resolved.add(r.episodeId ?? r.itemId);
-    if (extra.containsKey(r.episodeId ?? r.itemId))
+    if (extra.containsKey(r.episodeId ?? r.itemId)) {
       return extra[r.episodeId ?? r.itemId];
+    }
     final id = r.itemId.split(':').last;
     if (r.itemId.startsWith('live:')) return liveItem(id);
     if (r.itemId.startsWith('movie:')) return movieItem(id);

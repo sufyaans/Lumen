@@ -9,19 +9,18 @@ import '../../core/widgets/cards.dart';
 import '../../core/widgets/content_row.dart';
 import '../../domain/browse_queries.dart';
 import '../../domain/media_summary.dart';
+import '../player/play.dart';
+import '../player/player_data.dart';
 import 'paged_grid.dart';
 
-/// Opens an item: movies and series go to their detail page; channels go
-/// to the player (Phase 4).
-void openItem(BuildContext context, MediaSummary item) {
+/// Opens an item: channels start playing (zapping through [categoryId]);
+/// movies and series go to their detail page.
+void openItem(BuildContext context, MediaSummary item, {String? categoryId}) {
   if (item.kind == MediaKind.channel) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('${item.title}: playback arrives in the next update.'),
-        ),
-      );
+    playItem(
+      context,
+      PlayRequest(item.id, categoryId: categoryId, title: item.title),
+    );
     return;
   }
   context.push('/detail/${Uri.encodeComponent(item.id)}');
@@ -192,7 +191,8 @@ class _CategoryBrowserState extends ConsumerState<CategoryBrowser> {
       body = PagedGridSliver(
         load: _loaderFor(queries, version, _selected),
         style: style,
-        onItemPressed: (item) => openItem(context, item),
+        onItemPressed: (item) =>
+            openItem(context, item, categoryId: fav ? null : _selected),
         emptyMessage: fav
             ? 'No favourites yet. Open a channel and tap the star to add it.'
             : 'Nothing in this category.',

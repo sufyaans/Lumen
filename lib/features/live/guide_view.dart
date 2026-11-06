@@ -184,7 +184,11 @@ class _GuideViewState extends ConsumerState<GuideView> {
                         return FocusableCard(
                           focusScale: 1.0,
                           semanticLabel: ch.title,
-                          onPressed: () => openItem(context, ch),
+                          onPressed: () => openItem(
+                            context,
+                            ch,
+                            categoryId: widget.categoryId,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             alignment: Alignment.centerLeft,
@@ -256,6 +260,7 @@ class _GuideViewState extends ConsumerState<GuideView> {
                               itemCount: _rows.length,
                               itemBuilder: (context, i) => _ProgrammeRow(
                                 row: _rows[i],
+                                categoryId: widget.categoryId,
                                 from: _from,
                                 to: _to,
                                 now: now,
@@ -291,6 +296,7 @@ class _GuideViewState extends ConsumerState<GuideView> {
 class _ProgrammeRow extends StatelessWidget {
   const _ProgrammeRow({
     required this.row,
+    this.categoryId,
     required this.from,
     required this.to,
     required this.now,
@@ -299,6 +305,7 @@ class _ProgrammeRow extends StatelessWidget {
   });
 
   final GuideRow row;
+  final String? categoryId;
   final DateTime from;
   final DateTime to;
   final DateTime now;
@@ -325,7 +332,8 @@ class _ProgrammeRow extends StatelessWidget {
               child: FocusableCard(
                 focusScale: 1.0,
                 semanticLabel: '${row.channel.title}: no programme information',
-                onPressed: () => openItem(context, row.channel),
+                onPressed: () =>
+                    openItem(context, row.channel, categoryId: categoryId),
                 child: Container(
                   width: 420,
                   alignment: Alignment.centerLeft,
@@ -364,7 +372,11 @@ class _ProgrammeRow extends StatelessWidget {
                             '${row.channel.title}: ${p.title} at ${hm(p.start)}',
                         onPressed: () {
                           if (isNow) {
-                            openItem(context, row.channel);
+                            openItem(
+                              context,
+                              row.channel,
+                              categoryId: categoryId,
+                            );
                           } else {
                             ScaffoldMessenger.of(context)
                               ..hideCurrentSnackBar()

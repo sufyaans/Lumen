@@ -11,6 +11,8 @@ import '../../core/widgets/content_row.dart';
 import '../../domain/browse_catalog.dart';
 import '../../domain/media_summary.dart';
 import '../common/catalog_screen.dart';
+import '../player/play.dart';
+import '../player/player_data.dart';
 
 /// Home: a hero banner (only when a title has usable artwork) and the
 /// rows from the brief. Empty rows are hidden by [ContentRow].
@@ -157,15 +159,8 @@ class _Hero extends ConsumerWidget {
                           label: 'Play',
                           icon: Icons.play_arrow,
                           tone: PillTone.primary,
-                          onPressed: () => ScaffoldMessenger.of(context)
-                            ..hideCurrentSnackBar()
-                            ..showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '${item.title}: playback arrives in the next update.',
-                                ),
-                              ),
-                            ),
+                          onPressed: () =>
+                              playItem(context, PlayRequest(item.id)),
                         ),
                         PillButton(
                           label: 'More info',

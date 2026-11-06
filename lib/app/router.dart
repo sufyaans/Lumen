@@ -10,6 +10,8 @@ import '../features/home/home_screen.dart';
 import '../features/live/live_screen.dart';
 import '../features/movies/movies_screen.dart';
 import '../features/onboarding/terms_screen.dart';
+import '../features/player/player_data.dart';
+import '../features/player/player_screen.dart';
 import '../features/providers/add_provider_screen.dart';
 import '../features/providers/sign_in_service.dart';
 import '../features/providers/sync_progress_screen.dart';
@@ -89,6 +91,14 @@ GoRouter buildRouter(Ref ref) {
           args: state.extra is ConnectionCheckArgs
               ? state.extra! as ConnectionCheckArgs
               : const ConnectionCheckArgs(),
+        ),
+      ),
+      GoRoute(
+        path: '/play',
+        builder: (context, state) => PlayerScreen(
+          request: state.extra is PlayRequest
+              ? state.extra! as PlayRequest
+              : const PlayRequest(''),
         ),
       ),
       GoRoute(

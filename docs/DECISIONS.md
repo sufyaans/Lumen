@@ -154,3 +154,37 @@ Not built yet:
 - "Sign in from your phone" (stretch)
 - the catch-up UI (stretch; URL builder exists)
 - a "Recently watched channels" row (recents are stored but have no row yet)
+
+## Phase 4
+
+### D46. Engine behind an interface
+`PlaybackEngine` (open, play, pause, seek, stop, tracks, hardware decoding, view, state stream) is implemented by `MediaKitEngine` on media_kit / libmpv. All player behaviour lives in `PlayerController`, which tests drive with a fake engine.
+
+### D47. mpv options used
+These come from mpv's option names; each is applied with `NativePlayer.setProperty` and logged (redacted) if the build rejects it:
+- Buffering profiles: `cache`, `demuxer-max-bytes`, `demuxer-readahead-secs`, `cache-secs` and `network-timeout`. Low latency is 8 MB / 1 s / 2 s / 10 s, Balanced 32 MB / 5 s / 10 s / 15 s, and Stable 64 MB / 20 s / 30 s / 20 s.
+- Live reconnect: `stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5`.
+- Hardware decoding: `hwdec` set to `auto-safe` (Auto), `auto` (On) or `no` (Off). It can be switched while playing.
+- Headers: `user-agent` and `referrer`, plus the media's HTTP headers (the provider's working user-agent and M3U per-entry headers).
+
+### D48. TLS verification in the player
+When the user allows an untrusted certificate for a provider, the player sets `tls-verify=no`. Otherwise it keeps libmpv's default. Turning `tls-verify=yes` on everywhere needs a CA bundle that the Android libmpv build may not ship, and could break every HTTPS stream. Sign-in and catalogue traffic (dio) always verifies certificates, as the brief requires. This is on the "Needs manual testing" list.
+
+### D49. Recovery rules
+- **Max connections:** a stream that fails within 6 s of opening, before any video, is checked once with `checkStream` (the failed stream has already released its slot). If that reports 401/403/empty, the player shows "Too many devices in use" with Retry and doesn't loop.
+- **Everything else:** up to 3 retries with 1 s / 2 s / 4 s backoff. Live retries cycle through the alternates: the other format (`m3u8` / `ts`), then the short `/{user}/{pass}/{id}` URL. A format that works after switching is saved on the provider and tried first next time.
+- **Stalls:** buffering for 15 s after video has started counts as a failure.
+
+### D50. One stream at a time
+Opening anything stops the previous stream first, then waits 300 ms. Zapping updates the channel shown at once, but only opens it after 350 ms without another press. Number entry resolves 1.3 s after the last digit.
+
+### D51. Background
+After 20 s in the background, live streams stop (freeing the provider connection) and VOD pauses with progress saved. Returning reopens live streams. Audio interruptions (calls, another app taking audio focus, headphones unplugged) pause playback.
+
+### D52. Remote keys
+- **Live:** Up/Down (or Channel ±) change channel unless a panel is open. Digits enter a channel number. Left opens the channel list when the controls are hidden.
+- **VOD:** Left/Right seek 10 s while the controls are hidden, and Fast-forward / Rewind skip 30 s.
+- **Both:** Play/Pause keys work everywhere. Back closes a panel, then hides the controls (TV), then leaves the player.
+
+### D53. Orientation and system UI
+On entry, phones lock to landscape when "Rotate to landscape for video" is on, and the system UI goes immersive. iPad and TV follow the brief. Leaving restores everything, including after errors. `PopScope(canPop: false)` disables the iOS swipe-back gesture on the player.

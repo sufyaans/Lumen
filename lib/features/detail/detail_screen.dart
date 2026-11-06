@@ -11,6 +11,8 @@ import '../../core/widgets/content_row.dart';
 import '../../core/widgets/fallback_art.dart';
 import '../../domain/browse_queries.dart';
 import '../../domain/media_summary.dart';
+import '../player/play.dart';
+import '../player/player_data.dart';
 
 final itemDetailProvider = FutureProvider.autoDispose
     .family<ItemDetail?, String>(
@@ -21,14 +23,6 @@ String _duration(Duration d) {
   final h = d.inHours;
   final m = d.inMinutes % 60;
   return h > 0 ? '${h}h ${m}m' : '$m min';
-}
-
-void _comingSoon(BuildContext context, String what) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(content: Text('$what: playback arrives in the next update.')),
-    );
 }
 
 /// Movie and series detail (brief section 3): artwork, meta, plot, Play /
@@ -176,13 +170,35 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                 icon: Icons.play_arrow,
                                 tone: PillTone.primary,
                                 autofocus: true,
-                                onPressed: () => _comingSoon(context, title),
+                                onPressed: () => playItem(
+                                  context,
+                                  resume != null
+                                      ? PlayRequest(
+                                          widget.itemId,
+                                          start: resume,
+                                        )
+                                      : nextEpisode != null
+                                      ? PlayRequest(
+                                          widget.itemId,
+                                          episodeId: nextEpisode.id,
+                                        )
+                                      : PlayRequest(
+                                          widget.itemId,
+                                          start: Duration.zero,
+                                        ),
+                                ),
                               ),
                               if (resume != null)
                                 PillButton(
                                   label: 'Play from start',
                                   icon: Icons.replay,
-                                  onPressed: () => _comingSoon(context, title),
+                                  onPressed: () => playItem(
+                                    context,
+                                    PlayRequest(
+                                      widget.itemId,
+                                      start: Duration.zero,
+                                    ),
+                                  ),
                                 ),
                               PillButton(
                                 label: inList ? 'In my list' : 'My list',
@@ -250,9 +266,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                     _EpisodeTile(
                                       episode: e,
                                       seriesTitle: title,
-                                      onPressed: () => _comingSoon(
+                                      onPressed: () => playItem(
                                         context,
-                                        '$title S${e.season} E${e.number}',
+                                        PlayRequest(
+                                          widget.itemId,
+                                          episodeId: e.id,
+                                        ),
                                       ),
                                     ),
                                 ],

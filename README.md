@@ -2,13 +2,14 @@
 
 A player-only IPTV app for **Android phones, Android TV / Fire TV, iPhone and iPad**, built with Flutter. Lumen ships with no content. It plays what the user's own provider supplies, using their Xtream Codes login or M3U playlist.
 
-Status: **Phase 3 (screens) done.**
+Status: **Phase 4 (player) done.**
 - Phase 0 built the navigation shells, theme, form-factor detection and TV focus engine.
 - Phase 1 built sign-in, with all 27 acceptance scenarios passing.
 - Phase 2 added the on-device SQLite catalogue.
 - Phase 3 built the screens: Add provider (Xtream, M3U link, M3U file, smart paste), sync progress, Connection check, Home with hero, Live TV with the guide grid, Movies, TV Shows, Detail with seasons and episodes, Search, Account, Settings, profiles and the parental PIN.
+- Phase 4 added the player (media_kit / libmpv): live and VOD, debounced zapping, channel numbers, the channel list, auto-reconnect with format switching, "Too many devices" detection, resume and progress, audio and subtitle tracks, picture modes, hardware decoding, and landscape lock on phones.
 
-The player is Phase 4; polish and release builds are Phase 5.
+Polish, performance and release builds are Phase 5.
 
 **Try it with the mock provider:** run `dart run tool/mock_server/main.dart`, start the app, and sign in with server `10.0.2.2:25461` (emulator) or your PC's LAN IP and port 25461 (phone on the same Wi-Fi). The username is `user` and the password is `pass`. See [the build brief](design/lumen-flutter-claude-code-prompt.md) and [decisions](docs/DECISIONS.md).
 
@@ -134,4 +135,7 @@ These can't be verified automatically from this setup and still need a real-devi
 - [ ] AltStore install and the keychain behaviour after re-signing
 - [ ] Real provider sign-in (Phase 1 onwards)
 - [ ] Real playback on an iPad and on a TV stick (Phase 4 onwards)
+- [ ] Player: sound with the iOS silent switch on, audio focus on Android, landscape lock on phones, hardware decoding Off on a device with decoder glitches
+- [ ] Player: which mpv options the bundled libmpv accepts (buffering, `stream-lavf-o`, `tls-verify`); rejected ones are logged, not fatal
+- [ ] Player: HTTPS streams with the default TLS setting (see DECISIONS D48)
 - [ ] Performance on a 1 GB TV stick in Lite mode (Phase 5)
