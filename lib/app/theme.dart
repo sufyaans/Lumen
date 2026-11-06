@@ -176,8 +176,20 @@ abstract final class LumenTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: c.surface,
-        indicatorColor: c.surfaceHigh,
-        labelTextStyle: WidgetStatePropertyAll(text.labelMedium),
+        // Active tab: red pill with a white icon and a red label.
+        indicatorColor: c.accent,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? Colors.white
+                : c.muted,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? text.labelMedium?.copyWith(color: c.accent)
+              : text.labelMedium?.copyWith(color: c.muted),
+        ),
         height: 68,
       ),
       dividerTheme: DividerThemeData(color: c.line, thickness: 1, space: 1),

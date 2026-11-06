@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lumen/app/theme.dart';
 import 'package:lumen/core/platform/form_factor.dart';
 import 'package:lumen/core/widgets/fallback_art.dart';
 import 'package:lumen/domain/browse_catalog.dart';
@@ -39,6 +40,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Midnight Circuit'), findsWidgets);
   });
+
+  for (final b in Brightness.values) {
+    testWidgets('active bottom tab is red (${b.name})', (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = b;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      await pumpLumen(tester, formFactor: FormFactor.phone);
+      expect(
+        Theme.of(tester.element(find.byType(NavigationBar))).brightness,
+        b,
+      );
+      final ctx = tester.element(find.byType(NavigationBar));
+      final theme = NavigationBarTheme.of(ctx);
+      final accent = LumenColors.of(ctx).accent;
+      expect(theme.indicatorColor, accent);
+      expect(
+        theme.labelTextStyle!.resolve({WidgetState.selected})!.color,
+        accent,
+      );
+      expect(
+        theme.iconTheme!.resolve({WidgetState.selected})!.color,
+        Colors.white,
+      );
+    });
+  }
 
   for (final ff in [FormFactor.tablet, FormFactor.tv]) {
     testWidgets('${ff.name} uses the top tab bar', (tester) async {
