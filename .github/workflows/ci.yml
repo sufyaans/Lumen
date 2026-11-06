@@ -21,7 +21,7 @@ jobs:
       - run: flutter --version
       - run: flutter pub get
       - name: Format
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format --output=none --set-exit-if-changed lib test tool
       - name: Analyze
         run: flutter analyze
       - name: Test

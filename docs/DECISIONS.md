@@ -48,3 +48,35 @@ The whole app gets 5% padding on all sides on TV (`TvSafeArea`). Rows keep `Clip
 
 ### D13. Image cache bounds
 These are set in `configureForDevice`: 100 MB / 500 images on phones, 64 MB / 300 on TV, 32 MB / 150 in Lite mode. Phase 5 tunes them against measured heap.
+
+## Phase 1
+
+### D14. Redirects followed manually
+`DioNetworkClient` sets `followRedirects: false` and follows up to 5 redirects itself. That's how a scheme or host change becomes visible, so the final base can be saved (scenario 6). It also means the per-host certificate rule applies to every hop.
+
+### D15. Untrusted certificates are allowed per host, never globally
+`badCertificateCallback` only returns true for a host the user explicitly allowed for that provider. The test checks that allowing one host doesn't allow another. The player (Phase 4) must mirror this with mpv's `tls-verify`.
+
+### D16. The probe skips the user-agent loop on transport failures
+DNS, refused, timeout and TLS failures skip the remaining user-agents for that endpoint, because the agent can't fix a dead socket. Only 401/403 and HTML/challenge pages try the next agent. This keeps the worst case under the 40 s budget: two candidates × one transport failure each. Without it, five agents × ten-second connect timeouts would blow the budget.
+
+### D17. Definitive answers stop the probe
+`auth:0`, `{}`, expired, banned/disabled and portal-detected responses end the probe at once. Retrying a wrong password with other agents could lock the account on strict panels.
+
+### D18. Portal detection needs a failed probe
+A `/c/` URL is still tried as Xtream, because some panels serve both. `portal_unsupported` is shown only when that probe fails with 404, HTML or unreadable data (brief §5.2).
+
+### D19. M3U channel name
+The name is the text after the comma that ends the attribute block. Attribute values are parsed with proper quote handling, so commas inside quotes are ignored and commas inside the name are kept ("Sport, Live, HD"). That is what the brief's "last comma that follows the attribute block" is aiming at. Splitting on the literal last comma would cut such names.
+
+### D20. Stream checks live in the connection layer
+`checkStream` opens at most 4 KB of a stream, following redirects. It treats 401/403, an empty 200 or an immediate close as max_connections. It runs only on demand ("Test playback" in Connection check, and later the player), never during sign-in.
+
+### D21. Header timeout guard
+dio's `receiveTimeout` covers gaps between body chunks. A server that accepts the connection and never sends headers is caught by an extra `connect + receive` timeout around the request (scenario 13).
+
+### D22. Scenarios that span later phases
+Scenarios 11, 22, 23, 24, 25 and 26 have a player or UI half: the playback banner, the Retry button, the offline banner over the cached catalogue, the password re-prompt screen, and headers reaching mpv. Phase 1 covers the connection-layer half: classification, redirects, the non-throwing store, and headers parsed per entry. The rest is tested in the phase that builds it (see CONNECTION_NOTES.md).
+
+### D23. Mock server lives in `tool/`
+`tool/mock_server/mock_xtream_server.dart` is shared by the tests and `dart run tool/mock_server/main.dart` (port 25461, `user` / `pass`). The TLS test uses a test-only self-signed certificate in `test/fixtures/tls/`.

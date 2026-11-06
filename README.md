@@ -2,7 +2,7 @@
 
 A player-only IPTV app for **Android phones, Android TV / Fire TV, iPhone and iPad**, built with Flutter. Lumen ships with no content. It plays what the user's own provider supplies, using their Xtream Codes login or M3U playlist.
 
-Status: **Phase 0 (foundation)**. Navigation shells, theme, form-factor detection and the TV focus engine are done. Sign-in, data, the full screens and the player follow in Phases 1–5. See [the build brief](design/lumen-flutter-claude-code-prompt.md) and [decisions](docs/DECISIONS.md).
+Status: **Phase 1 (connection layer) done.** Phase 0 built the navigation shells, theme, form-factor detection and TV focus engine. Phase 1 built sign-in: address cleaning, Xtream and M3U parsing, connection probing, error messages, redaction, secure storage, and a mock provider with all 27 acceptance scenarios passing. The data layer, full screens and player follow in Phases 2–5. See [the build brief](design/lumen-flutter-claude-code-prompt.md) and [decisions](docs/DECISIONS.md).
 
 ## Setup (Windows or Linux)
 
@@ -21,6 +21,14 @@ flutter analyze
 ```bash
 flutter test
 ```
+
+## Mock provider (for manual testing)
+
+```bash
+dart run tool/mock_server/main.dart
+```
+
+This serves a fake Xtream provider at `http://127.0.0.1:25461` (username `user`, password `pass`). From an Android emulator, use `10.0.2.2:25461`. It contains invented data only.
 
 ## Running
 
