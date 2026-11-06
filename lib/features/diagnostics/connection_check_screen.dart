@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -15,6 +16,7 @@ import '../../core/network/user_agents.dart';
 import '../../core/platform/form_factor.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/content_row.dart';
+import '../../data/db/app_database.dart';
 import '../../data/db/tables.dart';
 import '../../data/secure/credential_store.dart';
 import '../../data/xtream/server_endpoint.dart';
@@ -67,9 +69,16 @@ final connectionCheckRunnerProvider = FutureProvider.autoDispose
           p.endpointJson == null ? null : jsonDecode(p.endpointJson!),
         );
         if (e == null) return null;
+        final db = ref.read(appDatabaseProvider);
         return LiveConnectionCheck(
           online: online,
           network: net,
+          // A different setting worked: remember it, like sign-in does.
+          onWorkingUserAgent: (ua) => unawaited(
+            (db.update(db.providers)..where((t) => t.id.equals(p.id))).write(
+              ProvidersCompanion(userAgentId: Value(ua.id)),
+            ),
+          ),
           target: CheckTarget.xtream(
             endpoint: e,
             username: p.username ?? '',
@@ -166,6 +175,8 @@ class _ConnectionCheckScreenState extends ConsumerState<ConnectionCheckScreen> {
     final c = LumenColors.of(context);
     final t = Theme.of(context).textTheme;
     final g = pageGutter(context);
+    final w = MediaQuery.sizeOf(context).width;
+    final side = w - 2 * g > 860 ? (w - 860) / 2 : g;
     final mainSteps = _steps.isEmpty
         ? const <CheckStep>[]
         : _steps.sublist(0, _steps.length - 1);
@@ -176,7 +187,8 @@ class _ConnectionCheckScreenState extends ConsumerState<ConnectionCheckScreen> {
         child: FocusMemory(
           debugLabel: 'connection-check',
           child: ListView(
-            padding: EdgeInsets.fromLTRB(g, 16, g, 40),
+            // Keep the steps a readable width on TVs and tablets.
+            padding: EdgeInsets.fromLTRB(side, 16, side, 40),
             children: [
               Row(
                 children: [

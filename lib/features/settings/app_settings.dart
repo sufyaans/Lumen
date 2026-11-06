@@ -31,6 +31,16 @@ enum BufferingProfile { lowLatency, balanced, stable }
 /// Hardware decoding; "Off" is one tap away in the player (brief 7).
 enum HardwareDecoding { auto, on, off }
 
+/// How much fits on a TV or tablet screen. [compact] shows the most.
+enum DisplaySize {
+  compact(0.75),
+  standard(0.875),
+  large(1.0);
+
+  const DisplaySize(this.scale);
+  final double scale;
+}
+
 /// Plain (non-secret) settings. Secrets never go here (brief section 5.8).
 @immutable
 class AppSettings {
@@ -44,6 +54,7 @@ class AppSettings {
     this.buffering = BufferingProfile.balanced,
     this.hardwareDecoding = HardwareDecoding.auto,
     this.autoplayNextEpisode = true,
+    this.displaySize,
   });
 
   final ThemeMode themeMode;
@@ -58,6 +69,9 @@ class AppSettings {
   final HardwareDecoding hardwareDecoding;
   final bool autoplayNextEpisode;
 
+  /// Null = the default for the device (compact on TV, standard on tablet).
+  final DisplaySize? displaySize;
+
   bool get termsAccepted => acceptedTermsVersion >= AppConfig.termsVersion;
 
   AppSettings copyWith({
@@ -70,6 +84,7 @@ class AppSettings {
     BufferingProfile? buffering,
     HardwareDecoding? hardwareDecoding,
     bool? autoplayNextEpisode,
+    DisplaySize? displaySize,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     acceptedTermsVersion: acceptedTermsVersion ?? this.acceptedTermsVersion,
@@ -80,6 +95,7 @@ class AppSettings {
     buffering: buffering ?? this.buffering,
     hardwareDecoding: hardwareDecoding ?? this.hardwareDecoding,
     autoplayNextEpisode: autoplayNextEpisode ?? this.autoplayNextEpisode,
+    displaySize: displaySize ?? this.displaySize,
   );
 }
 
@@ -101,6 +117,7 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   static const _kBuffer = 'settings.buffering';
   static const _kHw = 'settings.hardwareDecoding';
   static const _kAutoplay = 'settings.autoplayNext';
+  static const _kDisplay = 'settings.displaySize';
 
   SharedPreferences get _prefs => ref.read(sharedPreferencesProvider);
 
@@ -136,7 +153,15 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
         HardwareDecoding.auto,
       ),
       autoplayNextEpisode: p.getBool(_kAutoplay) ?? true,
+      displaySize: DisplaySize.values
+          .where((e) => e.name == p.getString(_kDisplay))
+          .firstOrNull,
     );
+  }
+
+  Future<void> setDisplaySize(DisplaySize v) async {
+    state = state.copyWith(displaySize: v);
+    await _prefs.setString(_kDisplay, v.name);
   }
 
   Future<void> setStreamFormat(StreamFormat v) async {

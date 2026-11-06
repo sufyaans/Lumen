@@ -6,6 +6,14 @@ enum UserAgentProfile {
   okhttp('okhttp', 'okhttp/4.12.0'),
   vlc('vlc', 'VLC/3.0.20 LibVLC/3.0.20'),
   lavf('lavf', 'Lavf/60.16.100'),
+
+  /// A standard web browser, for panels that only allow browser-like
+  /// clients.
+  browser(
+    'browser',
+    'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Safari/537.36',
+  ),
   app('app', AppConfig.defaultUserAgent);
 
   const UserAgentProfile(this.id, this.value);

@@ -96,6 +96,24 @@ class SettingsScreen extends ConsumerWidget {
                       onChanged: n.setThemeMode,
                     ),
                   ),
+                  if (ff != FormFactor.phone)
+                    SettingRow(
+                      title: 'Display size',
+                      subtitle: 'Compact fits the most on screen. Large makes everything bigger.',
+                      trailing: Segmented<DisplaySize>(
+                        options: const [
+                          (DisplaySize.compact, 'Compact'),
+                          (DisplaySize.standard, 'Standard'),
+                          (DisplaySize.large, 'Large'),
+                        ],
+                        value:
+                            s.displaySize ??
+                            (ff == FormFactor.tv
+                                ? DisplaySize.compact
+                                : DisplaySize.standard),
+                        onChanged: n.setDisplaySize,
+                      ),
+                    ),
                   if (ff == FormFactor.phone)
                     SettingRow(
                       title: 'Rotate to landscape for video',

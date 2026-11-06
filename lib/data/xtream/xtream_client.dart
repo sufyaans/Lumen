@@ -392,11 +392,39 @@ ConnectionError? classifyStatus(NetResponse res) {
       details: 'HTTP 429 (rate limited)',
     );
   }
+  // The server (or the CDN in front of it) is down or overloaded.
+  if (_serverDown.contains(s)) {
+    return ConnectionError(
+      ConnectionErrorKind.timeoutOrRefused,
+      details: 'HTTP $s',
+    );
+  }
+  // Anything else is the provider answering "no": other 4xx codes and
+  // non-standard codes such as 509 or 512 that panels and firewalls use
+  // for blocked devices, IP locks or connection limits. The server did
+  // answer, so "isn't answering" would be misleading.
   return ConnectionError(
-    ConnectionErrorKind.timeoutOrRefused,
-    details: 'HTTP $s',
+    ConnectionErrorKind.http401or403,
+    details: 'HTTP $s (provider-specific refusal)',
   );
 }
+
+/// Standard "server down" codes, including Cloudflare's origin errors.
+const _serverDown = {
+  500,
+  502,
+  503,
+  504,
+  520,
+  521,
+  522,
+  523,
+  524,
+  525,
+  526,
+  527,
+  530,
+};
 
 /// Transport failure to error class.
 ConnectionError classifyNetException(NetException e) {

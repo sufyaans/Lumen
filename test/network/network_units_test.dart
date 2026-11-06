@@ -185,6 +185,22 @@ void main() {
         ConnectionErrorKind.timeoutOrRefused,
       );
     });
+    test('server down vs provider refusal', () {
+      for (final code in [500, 502, 503, 504, 522]) {
+        expect(
+          classifyStatus(res(code))!.kind,
+          ConnectionErrorKind.timeoutOrRefused,
+          reason: '$code',
+        );
+      }
+      for (final code in [400, 405, 451, 509, 512, 513]) {
+        expect(
+          classifyStatus(res(code))!.kind,
+          ConnectionErrorKind.http401or403,
+          reason: '$code',
+        );
+      }
+    });
     test('transport failures', () {
       ConnectionErrorKind k(NetFailureKind f) =>
           classifyNetException(NetException(f, '')).kind;
@@ -243,11 +259,12 @@ void main() {
       'okhttp',
       'vlc',
       'lavf',
+      'browser',
       'app',
     ]);
     expect(
       UserAgentProfile.probeOrder(saved: UserAgentProfile.vlc).map((e) => e.id),
-      ['vlc', 'okhttp', 'lavf', 'app'],
+      ['vlc', 'okhttp', 'lavf', 'browser', 'app'],
     );
   });
 

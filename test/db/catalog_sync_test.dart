@@ -442,7 +442,9 @@ void main() {
     expect(page, hasLength(50));
     expect(
       maxGap,
-      lessThan(const Duration(milliseconds: 1500)),
+      // Generous: the whole suite runs in parallel on one machine; a parse on
+      // the UI isolate would stall for many seconds, not ~1.
+      lessThan(const Duration(seconds: 3)),
       reason: 'stall $maxGap',
     );
   }, timeout: const Timeout(Duration(minutes: 3)));

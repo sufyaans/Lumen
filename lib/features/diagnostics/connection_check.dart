@@ -118,10 +118,19 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
     required this.target,
     required this.network,
     this.online = true,
-  });
+    this.onWorkingUserAgent,
+    this.attemptGap = const Duration(milliseconds: 400),
+  }) : _ua = target.userAgent;
 
   final CheckTarget target;
   final NetworkClient network;
+
+  /// Called when a different connection setting works than the saved one,
+  /// so the provider can switch to it.
+  final void Function(UserAgentProfile ua)? onWorkingUserAgent;
+  final Duration attemptGap;
+  UserAgentProfile _ua;
+  final _tried = <String>[];
 
   /// Connectivity hint at the time the check starts.
   final bool online;
@@ -218,10 +227,13 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
       try {
         final r = await InternetAddress.lookup(h)
             .timeout(const Duration(seconds: 10));
+        final v4 = r.where((a) => a.type == InternetAddressType.IPv4).length;
+        final v6 = r.where((a) => a.type == InternetAddressType.IPv6).length;
+        final fam = [if (v4 > 0) 'IPv4', if (v6 > 0) 'IPv6'].join(' and ');
         return (
           r.isNotEmpty,
           r.isNotEmpty
-              ? 'Found ${r.length} address${r.length == 1 ? '' : 'es'}'
+              ? 'Found $fam address${r.length == 1 ? '' : 'es'}'
               : 'No address',
           r.isEmpty
               ? const ConnectionError(ConnectionErrorKind.dnsFailure)
@@ -261,54 +273,84 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
     // 4 + 5. Response readable, login accepted.
     AccountInfo? account;
     if (target.endpoint != null) {
-      NetResponse? res;
       await step(() async {
         final urls = XtreamUrls(
           target.endpoint!,
           target.username!,
           target.password!,
         );
-        try {
-          res = await network.get(
-            urls.api(),
-            headers: {'User-Agent': target.userAgent.value, 'Accept': '*/*'},
-          );
-        } on NetException catch (e) {
-          return (false, e.kind.name, classifyNetException(e), null);
-        }
-        final r = res!;
-        final st = classifyStatus(r);
-        if (st != null) return (false, 'HTTP ${r.status}', st, r.status);
-        final body = decodeProviderBody(r.bytes);
-        return switch (body) {
-          JsonBody(:final value) => () {
-            account = AccountInfo.parse(value);
+        // Try the saved setting first, then the others, paced, stopping at
+        // the first that works. A refusal with one setting and success with
+        // another shows exactly what the provider filters on.
+        final order = UserAgentProfile.probeOrder(saved: target.userAgent);
+        String? firstReply;
+        int? firstStatus;
+        ConnectionError? firstError;
+        for (final (i, ua) in order.indexed) {
+          if (i > 0) await Future<void>.delayed(attemptGap);
+          NetResponse r;
+          try {
+            r = await network.get(
+              urls.api(),
+              headers: {'User-Agent': ua.value, 'Accept': '*/*'},
+            );
+          } on NetException catch (e) {
+            _tried.add('${ua.id}: ${e.kind.name}');
+            // Transport problems don't depend on the setting.
+            return (false, e.kind.name, classifyNetException(e), null);
+          }
+          final st = classifyStatus(r);
+          final body = st == null ? decodeProviderBody(r.bytes) : null;
+          if (body is JsonBody) {
+            _tried.add('${ua.id}: ${r.status}');
+            account = AccountInfo.parse(body.value);
+            if (ua != target.userAgent) {
+              _ua = ua;
+              onWorkingUserAgent?.call(ua);
+              return (
+                true,
+                'Refused with the ${target.userAgent.id} setting'
+                    '${firstStatus == null ? '' : ' (HTTP $firstStatus)'}; '
+                    'works with ${ua.id}. Saved for this provider.',
+                null,
+                r.status,
+              );
+            }
             return (
               true,
               'Data received (${r.bytes.length} bytes)',
               null,
               r.status,
             );
-          }(),
-          HtmlBody() => (
-            false,
-            'A web page came back',
-            const ConnectionError(ConnectionErrorKind.htmlResponse),
-            r.status,
-          ),
-          EmptyBody() => (
-            false,
-            'Empty response',
-            const ConnectionError(ConnectionErrorKind.authRejected),
-            r.status,
-          ),
-          MalformedBody() => (
-            false,
-            'Unreadable data',
-            const ConnectionError(ConnectionErrorKind.malformed),
-            r.status,
-          ),
-        };
+          }
+          _tried.add('${ua.id}: ${r.status}');
+          firstStatus ??= r.status;
+          firstReply ??= replySnippet(r, secrets: _secrets);
+          firstError ??=
+              st ??
+              switch (body) {
+                HtmlBody() => const ConnectionError(
+                  ConnectionErrorKind.htmlResponse,
+                ),
+                EmptyBody() => const ConnectionError(
+                  ConnectionErrorKind.authRejected,
+                ),
+                _ => const ConnectionError(ConnectionErrorKind.malformed),
+              };
+          // Only refusals and web pages can depend on the setting.
+          final k = firstError.kind;
+          if (k != ConnectionErrorKind.http401or403 &&
+              k != ConnectionErrorKind.htmlResponse) {
+            break;
+          }
+        }
+        return (
+          false,
+          'HTTP $firstStatus with every setting tried (${_tried.join(', ')})'
+              '${firstReply == null ? '' : '. Server said: "$firstReply"'}',
+          firstError,
+          firstStatus,
+        );
       });
       await step(() async {
         final a = account;
@@ -356,7 +398,7 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
           endpoint: target.endpoint!,
           username: target.username!,
           password: target.password!,
-          userAgent: target.userAgent,
+          userAgent: _ua,
         );
         try {
           final cats = await client.liveCategories();
@@ -426,7 +468,7 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
   Future<CheckStep> testPlayback() async {
     final sw = Stopwatch()..start();
     Uri? url;
-    var headers = <String, String>{'User-Agent': target.userAgent.value};
+    var headers = <String, String>{'User-Agent': _ua.value};
     if (target.endpoint != null) {
       var id = target.firstChannelId;
       if (id == null) {
@@ -436,7 +478,7 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
             endpoint: target.endpoint!,
             username: target.username!,
             password: target.password!,
-            userAgent: target.userAgent,
+            userAgent: _ua,
           );
           final cats = await client.liveCategories();
           if (cats.isNotEmpty) {
@@ -484,15 +526,21 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
 
   @override
   String report({required String osAndDevice}) {
+    final base = target.endpoint?.basePath.isNotEmpty ?? false;
     final b = StringBuffer()
       ..writeln('${AppConfig.appName} connection check')
       ..writeln('App version: ${AppConfig.version}')
       ..writeln('Device: $osAndDevice')
       ..writeln('Time: ${DateTime.now().toUtc().toIso8601String()}')
+      // Not written as a URL, so it survives the link scrubbing below.
       ..writeln(
-        'Server: ${target.scheme}://${maskHost(target.host)}:${target.port}',
+        'Server: ${maskHost(target.host)} · port ${target.port} · '
+        '${target.scheme}${base ? ' · with base path' : ''}',
       )
-      ..writeln('User-agent profile: ${target.userAgent.id}');
+      ..writeln(
+        'User-agent profile: ${_ua.id}'
+        '${_tried.isEmpty ? '' : ' (tried: ${_tried.join(', ')})'}',
+      );
     for (final (i, s) in [..._steps, _playback].indexed) {
       b.writeln(
         '${i + 1}. ${s.title}: ${s.status.name}'
@@ -500,6 +548,9 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
         '${s.elapsed == null ? '' : ' ${s.elapsed!.inMilliseconds} ms'}'
         '${s.error == null ? '' : ' [${s.error!.kind.name}]'}',
       );
+      if (s.detail != null && s.status != CheckStatus.pending) {
+        b.writeln('   ${s.detail}');
+      }
     }
     final out = b.toString().replaceAll(target.host, maskHost(target.host));
     return Redactor.redact(
@@ -507,6 +558,25 @@ class LiveConnectionCheck implements ConnectionCheckRunner {
       secrets: _secrets,
     );
   }
+}
+
+/// A short, readable, secret-free excerpt of an error reply, e.g. a panel's
+/// "Invalid credentials" or a firewall's "Access denied".
+String? replySnippet(NetResponse r, {Iterable<String> secrets = const []}) {
+  if (r.bytes.isEmpty) return null;
+  var t = utf8.decode(r.bytes.take(2048).toList(), allowMalformed: true);
+  t = t
+      .replaceAll(
+        RegExp(r'<(script|style)[^>]*>[\s\S]*?</\1>', caseSensitive: false),
+        ' ',
+      )
+      .replaceAll(RegExp(r'<[^>]+>'), ' ')
+      .replaceAll(RegExp(r'https?://[^\s"]+'), '[link]')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (t.isEmpty) return null;
+  if (t.length > 160) t = '${t.substring(0, 160)}…';
+  return Redactor.redact(t, secrets: secrets);
 }
 
 /// Template-stored M3U URLs need credentials put back for a test.

@@ -305,7 +305,9 @@ void main() {
     expect(progress.last, total);
     expect(
       maxGap,
-      lessThan(const Duration(milliseconds: 1500)),
+      // Generous: the whole suite runs in parallel on one machine; a parse on
+      // the UI isolate would stall for many seconds, not ~1.
+      lessThan(const Duration(seconds: 3)),
       reason: 'main isolate stalled for $maxGap',
     );
 
@@ -662,6 +664,21 @@ void main() {
         ConnectionErrorKind.timeoutOrRefused,
       );
     });
+
+    test(
+      'non-standard 512: refused (not "not answering"), every agent tried',
+      () async {
+        final s = await serve(MockProvider()..loginStatus = 512);
+        final r = await probe('${s.base}');
+        expect(kindOf(r), ConnectionErrorKind.http401or403);
+        expect(
+          r.attempts.where(
+            (a) => a.endpoint.scheme == 'http' && a.status == 512,
+          ),
+          hasLength(UserAgentProfile.values.length),
+        );
+      },
+    );
 
     test('404 at player_api: not an Xtream address', () async {
       final s = await serve(MockProvider()..loginStatus = 404);

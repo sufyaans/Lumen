@@ -188,3 +188,18 @@ After 20 s in the background, live streams stop (freeing the provider connection
 
 ### D53. Orientation and system UI
 On entry, phones lock to landscape when "Rotate to landscape for video" is on, and the system UI goes immersive. iPad and TV follow the brief. Leaving restores everything, including after errors. `PopScope(canPop: false)` disables the iOS swipe-back gesture on the player.
+
+## After Phase 4: TV feedback
+
+### D54. Display canvas for TV and tablet
+On a 1080p Android TV (960×540 logical), phone-sized layouts filled the screen. `DisplayCanvas` lays the app out on a larger virtual canvas and scales it to fit: 0.75 (1280×720) on TV by default, and 0.875 on tablets. A **Display size** setting (Compact, Standard, Large) changes this. With Compact, TV body text ends up around 15 dp, below the brief's 18 sp. That was a deliberate trade for density after user feedback; Large keeps the old size.
+
+### D55. Non-standard HTTP codes
+Codes like 512 or 509 come from panels and firewalls rejecting a request, not from a server that's down. They now map to "Your provider refused the request", and sign-in tries every identity before giving up. Only 500/502/503/504 and Cloudflare's 52x origin errors still mean "The server isn't answering".
+
+### D56. Extra identity, pacing, and a more useful Connection check
+- A standard Android Chrome user-agent (`browser`) is tried after Lavf and before the app's own.
+- Sign-in waits 400 ms after each refused attempt, so providers never see a burst.
+- The Connection check's response step tries each identity in turn. If a different one works, it's saved for that provider.
+- When every identity is refused, the check shows a short excerpt of the provider's reply, with secrets and links removed.
+- The report now shows the masked host, port and scheme (the old line was being scrubbed as a link), the identities tried and their status codes, and whether the address has IPv4 and/or IPv6.

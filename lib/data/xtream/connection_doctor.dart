@@ -117,6 +117,7 @@ class ConnectionDoctor {
     required this.network,
     this.timeouts = const NetTimeouts(),
     this.budget = const Duration(seconds: 40),
+    this.attemptGap = const Duration(milliseconds: 400),
     this.clock,
   });
 
@@ -124,6 +125,10 @@ class ConnectionDoctor {
   final NetTimeouts timeouts;
   final Duration budget;
   final DateTime Function()? clock;
+
+  /// Pause after a refused attempt before trying the next setting, so the
+  /// provider never sees a burst of logins (many panels rate-limit).
+  final Duration attemptGap;
 
   DateTime _now() => clock?.call() ?? DateTime.now();
 
@@ -193,6 +198,11 @@ class ConnectionDoctor {
           );
         }
         if (_now().isAfter(deadline)) break;
+        if (attempts.isNotEmpty &&
+            attempts.last.status != null &&
+            attemptGap > Duration.zero) {
+          await Future<void>.delayed(attemptGap);
+        }
 
         final urls = XtreamUrls(endpoint, user, pass);
         final started = _now();
