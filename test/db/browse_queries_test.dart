@@ -217,6 +217,59 @@ void main() {
     },
   );
 
+  test(
+    'tiles carry watch progress: movie bars, ticks and series episodes',
+    () async {
+      final sub = c.listen(syncControllerProvider, (_, _) {});
+      final r = await c
+          .read(signInServiceProvider)
+          .xtream(server: '${server.base}', username: 'user', password: 'pass');
+      final id = (r as SignInOk).providerId;
+      await until(
+        () => c.read(syncControllerProvider),
+        (s) => !s.running && s.lastResult != null,
+      );
+      final repo = c.read(catalogRepositoryProvider);
+      Future<void> save(String kind, String rid, int pos, {String? series}) =>
+          repo.saveProgress(
+            profileId: 1,
+            providerId: id,
+            kind: kind,
+            remoteId: rid,
+            seriesId: series,
+            position: Duration(minutes: pos),
+            duration: const Duration(minutes: 100),
+          );
+      await save('movie', '1001', 50);
+      await save('movie', '1002', 99);
+      await save('episode', '9001', 30, series: '501');
+
+      final q = c.read(browseQueriesProvider);
+      final movies = {
+        for (final m in await q.page(MediaKind.movie)) m.title: m,
+      };
+      expect(movies['Film 1']!.inProgress, isTrue);
+      expect(movies['Film 1']!.progress, closeTo(0.5, 0.001));
+      expect(movies['Film 2']!.watched, isTrue);
+      expect(movies['Film 3']!.progress, isNull);
+      final shows = {
+        for (final s in await q.page(MediaKind.series)) s.title: s,
+      };
+      expect(shows['Show 1']!.progress, closeTo(0.3, 0.001));
+
+      // Finishing the episode removes the series bar (it moves on).
+      await save('episode', '9001', 100, series: '501');
+      final again = {
+        for (final s in await q.page(MediaKind.series)) s.title: s,
+      };
+      expect(again['Show 1']!.progress, isNull);
+
+      // Search results carry it too.
+      expect((await q.search('Film 1')).first.inProgress, isTrue);
+      sub.close();
+    },
+  );
+
   test('parseItemId', () {
     expect(parseItemId('live:12'), (MediaKind.channel, '12'));
     expect(parseItemId('channel:12'), (MediaKind.channel, '12'));

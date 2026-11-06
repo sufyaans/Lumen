@@ -7,6 +7,7 @@ import 'package:lumen/app/data_providers.dart';
 import 'package:lumen/core/network/connection_error.dart';
 import 'package:lumen/core/network/network_client.dart';
 import 'package:lumen/core/platform/form_factor.dart';
+import 'package:lumen/core/widgets/cards.dart';
 import 'package:lumen/data/secure/credential_store.dart';
 import 'package:lumen/data/sync/catalog_sync.dart';
 import 'package:lumen/dev/preview_browse_queries.dart';
@@ -593,5 +594,55 @@ void main() {
     }
     expect(r.unreachable, isEmpty);
     expect(r.lost, isEmpty);
+  });
+
+  testWidgets('tiles show a red bar when started and a tick when watched', (
+    tester,
+  ) async {
+    const catalog = BrowseCatalog(
+      movies: [
+        MediaRow(
+          title: 'Drama',
+          items: [
+            MediaSummary(
+              id: 'movie:a',
+              kind: MediaKind.movie,
+              title: 'Half Way',
+              progress: 0.5,
+            ),
+            MediaSummary(
+              id: 'movie:b',
+              kind: MediaKind.movie,
+              title: 'All Done',
+              progress: 1.0,
+            ),
+            MediaSummary(
+              id: 'movie:c',
+              kind: MediaKind.movie,
+              title: 'Not Started',
+            ),
+          ],
+        ),
+      ],
+      movieGenres: ['Drama'],
+    );
+    await pumpLumen(tester, formFactor: FormFactor.tablet, catalog: catalog);
+    await tester.tap(find.text('Movies').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(WatchedBadge), findsOneWidget);
+    expect(find.bySemanticsLabel('All Done, watched'), findsOneWidget);
+    expect(find.bySemanticsLabel('Half Way, 50% watched'), findsOneWidget);
+    expect(find.bySemanticsLabel('Not Started'), findsOneWidget);
+  });
+
+  testWidgets('episodes show time left and Watched', (tester) async {
+    await pumpLumen(tester, formFactor: FormFactor.tablet);
+    unawaited(
+      GoRouter.of(tester.element(find.byType(Navigator).first))
+          .push('/detail/${Uri.encodeComponent('series:harbour-lights')}'),
+    );
+    await tester.pumpAndSettle();
+    // Preview: S1E1 is 39 min long and 40 % watched.
+    expect(find.text('23 min left'), findsOneWidget);
   });
 }

@@ -93,52 +93,94 @@ class PosterCard extends StatelessWidget {
     return FocusableCard(
       focusNode: focusNode,
       onPressed: onPressed,
-      semanticLabel: item.title,
+      semanticLabel: progressLabel(item),
       child: ClipRRect(
         borderRadius: _cardRadius,
         child: SizedBox(
           width: width,
           height: width * 3 / 2,
-          child: Artwork(
-            title: item.title,
-            url: item.imageUrl,
-            width: width,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: t.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      height: 1.1,
-                    ),
-                  ),
-                  if (item.subtitle.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        item.subtitle,
-                        maxLines: 1,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Artwork(
+                title: item.title,
+                url: item.imageUrl,
+                width: width,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
-                        style: t.labelSmall?.copyWith(
-                          color: const Color(0xD9FFFFFF),
+                        style: t.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
                         ),
                       ),
-                    ),
-                ],
+                      if (item.subtitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            item.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: t.labelSmall?.copyWith(
+                              color: const Color(0xD9FFFFFF),
+                            ),
+                          ),
+                        ),
+                      if (item.inProgress) ...[
+                        const SizedBox(height: 8),
+                        _ProgressBar(value: item.progress!),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+              if (item.watched)
+                const Positioned(top: 8, right: 8, child: WatchedBadge()),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Card label that includes watch state, for screen readers.
+String progressLabel(MediaSummary item) {
+  if (item.watched) return '${item.title}, watched';
+  if (item.inProgress) {
+    return '${item.title}, ${(item.progress! * 100).round()}% watched';
+  }
+  return item.title;
+}
+
+/// Tick shown on finished movies, series and episodes.
+class WatchedBadge extends StatelessWidget {
+  const WatchedBadge({super.key, this.size = 26});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Watched',
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: LumenColors.of(context).accent,
+        shape: BoxShape.circle,
+        boxShadow: const [BoxShadow(blurRadius: 6, color: Color(0x66000000))],
+      ),
+      child: Icon(Icons.check, size: size * 0.65, color: Colors.white),
+    ),
+  );
 }
 
 /// 16:9 card used for "Continue watching".

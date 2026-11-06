@@ -104,7 +104,7 @@ class RepositoryBrowseQueries implements BrowseQueries {
           ),
         );
       case MediaKind.movie:
-        return [
+        return repo.withProgress(providerId, profileId, [
           for (final m in await repo.moviesPage(
             providerId,
             categoryId: categoryId,
@@ -113,9 +113,9 @@ class RepositoryBrowseQueries implements BrowseQueries {
             offset: offset,
           ))
             repo.mapMovie(m),
-        ];
+        ]);
       case MediaKind.series:
-        return [
+        return repo.withProgress(providerId, profileId, [
           for (final s in await repo.seriesPage(
             providerId,
             categoryId: categoryId,
@@ -124,13 +124,17 @@ class RepositoryBrowseQueries implements BrowseQueries {
             offset: offset,
           ))
             repo.mapSeries(s),
-        ];
+        ]);
     }
   }
 
   @override
-  Future<List<MediaSummary>> search(String query, {int limit = 60}) =>
-      repo.search(providerId, query, filter: filter, limit: limit);
+  Future<List<MediaSummary>> search(String query, {int limit = 60}) async =>
+      repo.withProgress(
+        providerId,
+        profileId,
+        await repo.search(providerId, query, filter: filter, limit: limit),
+      );
 
   @override
   Future<bool> toggleMyList(String itemId) async {

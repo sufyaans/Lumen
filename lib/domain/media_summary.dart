@@ -29,6 +29,31 @@ class MediaSummary {
   final int? channelNumber;
   final String? nowTitle;
   final String? nextTitle;
+
+  /// Finished (Netflix marks these with a tick instead of a bar).
+  bool get watched =>
+      kind != MediaKind.channel && (progress ?? 0) >= watchedThreshold;
+
+  /// Started but not finished: show the red bar.
+  bool get inProgress =>
+      kind != MediaKind.channel &&
+      (progress ?? 0) > startedThreshold &&
+      !watched;
+
+  static const startedThreshold = 0.01;
+  static const watchedThreshold = 0.95;
+
+  MediaSummary withProgress(double? p) => MediaSummary(
+    id: id,
+    kind: kind,
+    title: title,
+    subtitle: subtitle,
+    imageUrl: imageUrl,
+    progress: p,
+    channelNumber: channelNumber,
+    nowTitle: nowTitle,
+    nextTitle: nextTitle,
+  );
 }
 
 @immutable

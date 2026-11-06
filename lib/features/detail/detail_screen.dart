@@ -7,6 +7,7 @@ import '../../core/focus/focus_memory.dart';
 import '../../core/focus/focusable_card.dart';
 import '../../core/widgets/artwork.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/cards.dart';
 import '../../core/widgets/content_row.dart';
 import '../../core/widgets/fallback_art.dart';
 import '../../domain/browse_queries.dart';
@@ -37,6 +38,12 @@ class DetailScreen extends ConsumerStatefulWidget {
 }
 
 class _DetailScreenState extends ConsumerState<DetailScreen> {
+  /// Plays, then reloads so Resume, bars and ticks show the new position.
+  Future<void> _play(BuildContext context, PlayRequest request) async {
+    await playItem(context, request);
+    if (mounted) ref.invalidate(itemDetailProvider(widget.itemId));
+  }
+
   int? _season;
   bool? _inList;
 
@@ -156,6 +163,31 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (meta.isNotEmpty) Text(meta, style: t.bodySmall),
+                          if (resume != null &&
+                              d.duration != null &&
+                              d.duration! > Duration.zero) ...[
+                            const SizedBox(height: 10),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 360),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value:
+                                      (resume.inMilliseconds /
+                                              d.duration!.inMilliseconds)
+                                          .clamp(0.0, 1.0),
+                                  minHeight: 4,
+                                  color: c.accent,
+                                  backgroundColor: c.surfaceHigh,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_duration(d.duration! - resume)} left',
+                              style: t.bodySmall?.copyWith(color: c.accent),
+                            ),
+                          ],
                           const SizedBox(height: 16),
                           Wrap(
                             spacing: 12,
@@ -170,7 +202,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                 icon: Icons.play_arrow,
                                 tone: PillTone.primary,
                                 autofocus: true,
-                                onPressed: () => playItem(
+                                onPressed: () => _play(
                                   context,
                                   resume != null
                                       ? PlayRequest(
@@ -192,7 +224,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                 PillButton(
                                   label: 'Play from start',
                                   icon: Icons.replay,
-                                  onPressed: () => playItem(
+                                  onPressed: () => _play(
                                     context,
                                     PlayRequest(
                                       widget.itemId,
@@ -266,7 +298,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                     _EpisodeTile(
                                       episode: e,
                                       seriesTitle: title,
-                                      onPressed: () => playItem(
+                                      onPressed: () => _play(
                                         context,
                                         PlayRequest(
                                           widget.itemId,
@@ -313,6 +345,9 @@ class _EpisodeTile extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final e = episode;
     final w = MediaQuery.sizeOf(context).width < 640 ? 84.0 : 116.0;
+    final frac = (e.progress ?? 0).clamp(0.0, 1.0);
+    final watched = frac >= MediaSummary.watchedThreshold;
+    final inProgress = frac > MediaSummary.startedThreshold && !watched;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: FocusableCard(
@@ -341,25 +376,42 @@ class _EpisodeTile extends StatelessWidget {
                 child: SizedBox(
                   width: w,
                   height: w * 9 / 16,
-                  child: Artwork(
-                    title: '$seriesTitle${e.season}${e.number}',
-                    url: e.imageUrl,
-                    width: w,
-                    child: e.progress == null
-                        ? null
-                        : Align(
-                            alignment: Alignment.bottomCenter,
-                            child: FractionallySizedBox(
-                              widthFactor: 1,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: FractionallySizedBox(
-                                  widthFactor: e.progress!.clamp(0.0, 1.0),
-                                  child: Container(height: 3, color: c.accent),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Artwork(
+                        title: '$seriesTitle${e.season}${e.number}',
+                        url: e.imageUrl,
+                        width: w,
+                      ),
+                      if (inProgress)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 4,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: (frac * 1000).round(),
+                                child: ColoredBox(color: c.accent),
+                              ),
+                              Expanded(
+                                flex: 1000 - (frac * 1000).round(),
+                                child: const ColoredBox(
+                                  color: Color(0x66FFFFFF),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
+                        ),
+                      if (watched)
+                        const Positioned(
+                          top: 6,
+                          right: 6,
+                          child: WatchedBadge(size: 22),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -374,7 +426,22 @@ class _EpisodeTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (e.duration != null)
+                    if (watched)
+                      Text(
+                        'Watched',
+                        style: t.bodySmall?.copyWith(color: c.accent),
+                      )
+                    else if (inProgress && e.duration != null)
+                      Text(
+                        '${_duration(e.duration! * (1 - frac))} left',
+                        style: t.bodySmall?.copyWith(color: c.accent),
+                      )
+                    else if (inProgress)
+                      Text(
+                        'In progress',
+                        style: t.bodySmall?.copyWith(color: c.accent),
+                      )
+                    else if (e.duration != null)
                       Text(_duration(e.duration!), style: t.bodySmall),
                     if (e.plot != null)
                       Text(

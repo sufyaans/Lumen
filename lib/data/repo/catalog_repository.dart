@@ -392,15 +392,102 @@ class CatalogRepository {
       ),
     ];
 
+    // Red bars and ticks on every movie and series tile (Netflix-style).
+    Future<List<MediaRow>> mark(List<MediaRow> rows) async => [
+      for (final r in rows)
+        r.title == 'Continue watching'
+            ? r
+            : MediaRow(
+                title: r.title,
+                style: r.style,
+                items: await withProgress(providerId, profileId, r.items),
+              ),
+    ];
+
     return BrowseCatalog(
-      home: home,
+      home: await mark(home),
       live: live,
-      movies: movies,
-      series: series,
+      movies: await mark(movies),
+      series: await mark(series),
       liveCategories: [for (final r in live) r.title],
       movieGenres: [for (final r in movies) r.title],
       seriesGenres: [for (final r in series) r.title],
     );
+  }
+
+  /// Copies [items] with their watch progress for [profileId]:
+  /// * movies: how far through the movie (1.0 = finished),
+  /// * series: progress of the episode watched most recently, unless that
+  ///   episode was finished.
+  Future<List<MediaSummary>> withProgress(
+    String providerId,
+    int profileId,
+    List<MediaSummary> items,
+  ) async {
+    final movieIds = <String>[];
+    final seriesIds = <String>[];
+    for (final i in items) {
+      final p = parseId(i.id);
+      if (p == null) continue;
+      if (i.kind == MediaKind.movie) movieIds.add(p.$2);
+      if (i.kind == MediaKind.series) seriesIds.add(p.$2);
+    }
+    if (movieIds.isEmpty && seriesIds.isEmpty) return items;
+    double frac(ProgressRow r) =>
+        r.durationMs <= 0 ? 0 : (r.positionMs / r.durationMs).clamp(0.0, 1.0);
+
+    final movies = <String, double>{};
+    if (movieIds.isNotEmpty) {
+      for (final r
+          in await (db.select(db.progress)..where(
+                (t) =>
+                    t.profileId.equals(profileId) &
+                    t.providerId.equals(providerId) &
+                    t.kind.equals(ContentKind.movie) &
+                    t.remoteId.isIn(movieIds),
+              ))
+              .get()) {
+        movies[r.remoteId] = frac(r);
+      }
+    }
+    final series = <String, double?>{};
+    if (seriesIds.isNotEmpty) {
+      final rows =
+          await (db.select(db.progress)
+                ..where(
+                  (t) =>
+                      t.profileId.equals(profileId) &
+                      t.providerId.equals(providerId) &
+                      t.kind.equals(ContentKind.episode) &
+                      t.seriesId.isIn(seriesIds),
+                )
+                ..orderBy([
+                  (t) => OrderingTerm(
+                    expression: t.updatedAt,
+                    mode: OrderingMode.desc,
+                  ),
+                ]))
+              .get();
+      for (final r in rows) {
+        if (series.containsKey(r.seriesId)) continue;
+        final f = frac(r);
+        series[r.seriesId!] = f < MediaSummary.watchedThreshold ? f : null;
+      }
+    }
+    return [
+      for (final i in items)
+        switch (i.kind) {
+          MediaKind.movie =>
+            movies.containsKey(parseId(i.id)!.$2)
+                ? i.withProgress(movies[parseId(i.id)!.$2])
+                : i,
+          MediaKind.series =>
+            series.containsKey(parseId(i.id)!.$2)
+                ? i.withProgress(series[parseId(i.id)!.$2])
+                : i,
+          MediaKind.channel => i,
+        },
+    ];
   }
 
   // ---- user data ----------------------------------------------------------------
