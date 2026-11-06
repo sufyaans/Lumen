@@ -305,4 +305,38 @@ void main() {
       reason: 'retried with software decoding',
     );
   });
+
+  testWidgets(
+    'phone: the settings panel closes with its X and by tapping outside',
+    (tester) async {
+      final r = await openPlayer(
+        tester,
+        const PlayRequest('movie:9'),
+        ff: FormFactor.phone,
+      );
+      r.engine.playingAt(
+        const Duration(seconds: 3),
+        duration: const Duration(minutes: 3),
+      );
+      await settle(tester);
+
+      await tester.tap(find.bySemanticsLabel('Player settings'));
+      await settle(tester);
+      expect(find.text('Subtitles'), findsOneWidget);
+      // Choosing an option keeps the panel open.
+      await tester.tap(find.text('Off').first);
+      await settle(tester);
+      expect(find.text('Subtitles'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close));
+      await settle(tester);
+      expect(find.text('Subtitles'), findsNothing);
+
+      await tester.tap(find.bySemanticsLabel('Player settings'));
+      await settle(tester);
+      expect(find.text('Subtitles'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 400)); // left of the panel
+      await settle(tester);
+      expect(find.text('Subtitles'), findsNothing);
+    },
+  );
 }

@@ -172,6 +172,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     }
   }
 
+  void _closePanel() {
+    setState(() => _panel = _Panel.none);
+    _scheduleHide();
+    _rootFocus.requestFocus();
+  }
+
   /// Back: close a panel, then hide the controls, then leave.
   void _back() {
     if (_panel != _Panel.none) {
@@ -329,7 +335,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
-              if (_overlay && _panel == _Panel.none) {
+              if (_panel != _Panel.none) {
+                _closePanel();
+              } else if (_overlay) {
                 setState(() => _overlay = false);
               } else {
                 _showOverlay();
@@ -387,6 +395,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 if (_panel == _Panel.channels && live)
                   _ChannelPanel(
                     controller: _c,
+                    onClose: _closePanel,
                     onPicked: (i) {
                       unawaited(_c.tuneTo(i));
                       setState(() => _panel = _Panel.none);
@@ -394,7 +403,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     },
                   ),
                 if (_panel == _Panel.settings)
-                  _SettingsPanel(controller: _c, state: s, live: live),
+                  _SettingsPanel(
+                    controller: _c,
+                    state: s,
+                    live: live,
+                    onClose: _closePanel,
+                  ),
               ],
             ),
           ),
@@ -821,10 +835,15 @@ class _Controls extends StatelessWidget {
 }
 
 class _ChannelPanel extends StatelessWidget {
-  const _ChannelPanel({required this.controller, required this.onPicked});
+  const _ChannelPanel({
+    required this.controller,
+    required this.onPicked,
+    required this.onClose,
+  });
 
   final PlayerController controller;
   final void Function(int index) onPicked;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -840,88 +859,90 @@ class _ChannelPanel extends StatelessWidget {
       bottom: 0,
       left: 0,
       width: width,
-      child: Container(
-        color: const Color(0xEB0A0A0E),
-        child: SafeArea(
-          child: FocusMemory(
-            debugLabel: 'channel-panel',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text(
-                    'Channels',
-                    style: t.titleMedium?.copyWith(color: Colors.white),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: Container(
+          color: const Color(0xEB0A0A0E),
+          child: SafeArea(
+            child: FocusMemory(
+              debugLabel: 'channel-panel',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                    child: _PanelHeader(title: 'Channels', onClose: onClose),
                   ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: ScrollController(
-                      initialScrollOffset: start * 60.0,
-                    ),
-                    itemExtent: 60,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: c.channels.length,
-                    itemBuilder: (context, i) {
-                      final ch = c.channels[i];
-                      final current = i == c.channelIndex;
-                      return FocusableCard(
-                        focusScale: 1.0,
-                        outlineColor: Colors.white,
-                        autofocus: current,
-                        semanticLabel: ch.title,
-                        onPressed: () => onPicked(i),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(
-                            color: current ? const Color(0x1AFFFFFF) : null,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 44,
-                                child: Text(
-                                  '${ch.channelNumber ?? ''}',
-                                  style: t.labelLarge?.copyWith(
-                                    color: Colors.white70,
+                  Expanded(
+                    child: ListView.builder(
+                      controller: ScrollController(
+                        initialScrollOffset: start * 60.0,
+                      ),
+                      itemExtent: 60,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      itemCount: c.channels.length,
+                      itemBuilder: (context, i) {
+                        final ch = c.channels[i];
+                        final current = i == c.channelIndex;
+                        return FocusableCard(
+                          focusScale: 1.0,
+                          outlineColor: Colors.white,
+                          autofocus: current,
+                          semanticLabel: ch.title,
+                          onPressed: () => onPicked(i),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            decoration: BoxDecoration(
+                              color: current ? const Color(0x1AFFFFFF) : null,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 44,
+                                  child: Text(
+                                    '${ch.channelNumber ?? ''}',
+                                    style: t.labelLarge?.copyWith(
+                                      color: Colors.white70,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      ch.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: t.bodyLarge?.copyWith(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    if (ch.nowTitle != null)
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        ch.nowTitle!,
+                                        ch.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: t.bodySmall?.copyWith(
-                                          color: Colors.white60,
+                                        style: t.bodyLarge?.copyWith(
+                                          color: Colors.white,
                                         ),
                                       ),
-                                  ],
+                                      if (ch.nowTitle != null)
+                                        Text(
+                                          ch.nowTitle!,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: t.bodySmall?.copyWith(
+                                            color: Colors.white60,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -935,11 +956,13 @@ class _SettingsPanel extends StatelessWidget {
     required this.controller,
     required this.state,
     required this.live,
+    required this.onClose,
   });
 
   final PlayerController controller;
   final EngineState state;
   final bool live;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -962,82 +985,111 @@ class _SettingsPanel extends StatelessWidget {
       bottom: 0,
       right: 0,
       width: width,
-      child: Container(
-        color: const Color(0xEB0A0A0E),
-        child: SafeArea(
-          child: FocusMemory(
-            debugLabel: 'player-settings',
-            child: ListView(
-              padding: const EdgeInsets.all(18),
-              children: [
-                Text(
-                  'Player settings',
-                  style: t.titleMedium?.copyWith(color: Colors.white),
-                ),
-                const SizedBox(height: 16),
-                if (state.audioTracks.length > 1)
-                  section('Audio', [
-                    for (final a in state.audioTracks)
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: Container(
+          color: const Color(0xEB0A0A0E),
+          child: SafeArea(
+            child: FocusMemory(
+              debugLabel: 'player-settings',
+              child: ListView(
+                padding: const EdgeInsets.all(18),
+                children: [
+                  _PanelHeader(title: 'Player settings', onClose: onClose),
+                  const SizedBox(height: 12),
+                  if (state.audioTracks.length > 1)
+                    section('Audio', [
+                      for (final a in state.audioTracks)
+                        TabPill(
+                          label: a.label,
+                          selected: a.id == state.audioTrackId,
+                          filled: true,
+                          onPressed: () => c.engine.setAudioTrack(a.id),
+                        ),
+                    ]),
+                  section('Subtitles', [
+                    TabPill(
+                      label: 'Off',
+                      selected:
+                          state.subtitleTrackId == null ||
+                          state.subtitleTrackId == 'no',
+                      filled: true,
+                      onPressed: () => c.engine.setSubtitleTrack(null),
+                    ),
+                    for (final s in state.subtitleTracks)
                       TabPill(
-                        label: a.label,
-                        selected: a.id == state.audioTrackId,
+                        label: s.label,
+                        selected: s.id == state.subtitleTrackId,
                         filled: true,
-                        onPressed: () => c.engine.setAudioTrack(a.id),
+                        onPressed: () => c.engine.setSubtitleTrack(s.id),
                       ),
                   ]),
-                section('Subtitles', [
-                  TabPill(
-                    label: 'Off',
-                    selected:
-                        state.subtitleTrackId == null ||
-                        state.subtitleTrackId == 'no',
-                    filled: true,
-                    onPressed: () => c.engine.setSubtitleTrack(null),
+                  section('Picture', [
+                    for (final (a, label) in const [
+                      (AspectMode.fit, 'Fit'),
+                      (AspectMode.fill, 'Fill'),
+                      (AspectMode.wide, '16:9'),
+                      (AspectMode.standard, '4:3'),
+                    ])
+                      TabPill(
+                        label: label,
+                        selected: c.aspect == a,
+                        filled: true,
+                        onPressed: () => c.setAspect(a),
+                      ),
+                  ]),
+                  section('Hardware decoding', [
+                    for (final (h, label) in const [
+                      (HardwareDecoding.auto, 'Auto'),
+                      (HardwareDecoding.on, 'On'),
+                      (HardwareDecoding.off, 'Off'),
+                    ])
+                      TabPill(
+                        label: label,
+                        selected: c.hardwareDecoding == h,
+                        filled: true,
+                        onPressed: () => c.setHardwareDecoding(h),
+                      ),
+                  ]),
+                  Text(
+                    'Turn hardware decoding off if the picture shows green blocks or stutters.',
+                    style: t.bodySmall?.copyWith(color: Colors.white60),
                   ),
-                  for (final s in state.subtitleTracks)
-                    TabPill(
-                      label: s.label,
-                      selected: s.id == state.subtitleTrackId,
-                      filled: true,
-                      onPressed: () => c.engine.setSubtitleTrack(s.id),
-                    ),
-                ]),
-                section('Picture', [
-                  for (final (a, label) in const [
-                    (AspectMode.fit, 'Fit'),
-                    (AspectMode.fill, 'Fill'),
-                    (AspectMode.wide, '16:9'),
-                    (AspectMode.standard, '4:3'),
-                  ])
-                    TabPill(
-                      label: label,
-                      selected: c.aspect == a,
-                      filled: true,
-                      onPressed: () => c.setAspect(a),
-                    ),
-                ]),
-                section('Hardware decoding', [
-                  for (final (h, label) in const [
-                    (HardwareDecoding.auto, 'Auto'),
-                    (HardwareDecoding.on, 'On'),
-                    (HardwareDecoding.off, 'Off'),
-                  ])
-                    TabPill(
-                      label: label,
-                      selected: c.hardwareDecoding == h,
-                      filled: true,
-                      onPressed: () => c.setHardwareDecoding(h),
-                    ),
-                ]),
-                Text(
-                  'Turn hardware decoding off if the picture shows green blocks or stutters.',
-                  style: t.bodySmall?.copyWith(color: Colors.white60),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Title row of a player panel with a close button (touch screens have no
+/// Back key to close it).
+class _PanelHeader extends StatelessWidget {
+  const _PanelHeader({required this.title, required this.onClose});
+
+  final String title;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(color: Colors.white),
+        ),
+      ),
+      _GlassButton(
+        icon: Icons.close,
+        label: 'Close',
+        size: 40,
+        onPressed: onClose,
+      ),
+    ],
+  );
 }
