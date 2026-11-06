@@ -36,6 +36,7 @@ class PlayerController extends ChangeNotifier {
     this.connectWindow = const Duration(seconds: 6),
     this.stallTimeout = const Duration(seconds: 15),
     this.numberTimeout = const Duration(milliseconds: 1300),
+    this.firstFrameTimeout = const Duration(seconds: 25),
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now {
     _sub = engine.states.listen(_onEngine);
@@ -51,6 +52,11 @@ class PlayerController extends ChangeNotifier {
   final Duration connectWindow;
   final Duration stallTimeout;
   final Duration numberTimeout;
+
+  /// If playback position hasn't moved this long after opening, the stream
+  /// counts as failed (a decoder that drops every frame, a server that
+  /// sends headers but no data) instead of spinning forever.
+  final Duration firstFrameTimeout;
   final DateTime Function() _clock;
 
   late final StreamSubscription<EngineState> _sub;
@@ -92,6 +98,8 @@ class PlayerController extends ChangeNotifier {
   Timer? _numberTimer;
   Timer? _progressTimer;
   Timer? _stallTimer;
+  Timer? _firstFrameTimer;
+  bool _moved = false;
   int _generation = 0;
 
   void _notify() {
@@ -156,6 +164,14 @@ class PlayerController extends ChangeNotifier {
     _notify();
     _openedAt = _clock();
     _hasOpen = true;
+    _moved = false;
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = Timer(firstFrameTimeout, () {
+      if (_disposed || gen != _generation || _moved || _recovering) return;
+      if (phase == PlayerPhase.failed || phase == PlayerPhase.ended) return;
+      NetLog.w('playback did not start within $firstFrameTimeout');
+      unawaited(_onFailure(stalled: true));
+    });
     opens++;
     await engine.open(next.sources[sourceIndex], start: start);
     if (next.isLive) unawaited(data.markWatched(next));
@@ -176,6 +192,10 @@ class PlayerController extends ChangeNotifier {
       return;
     }
 
+    if (s.position > Duration.zero && !_moved) {
+      _moved = true;
+      _firstFrameTimer?.cancel();
+    }
     final started = s.hasVideo || (s.playing && s.position > Duration.zero);
     if (started && !_gotVideo) {
       _gotVideo = true;
@@ -283,6 +303,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _fail(ConnectionError e) {
+    _firstFrameTimer?.cancel();
     error = e;
     phase = PlayerPhase.failed;
     _progressTimer?.cancel();
@@ -462,6 +483,7 @@ class PlayerController extends ChangeNotifier {
     _numberTimer?.cancel();
     _progressTimer?.cancel();
     _stallTimer?.cancel();
+    _firstFrameTimer?.cancel();
     await _saveProgress();
     if (_hasOpen) await engine.stop();
     _hasOpen = false;
@@ -470,6 +492,7 @@ class PlayerController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _firstFrameTimer?.cancel();
     _zapTimer?.cancel();
     _numberTimer?.cancel();
     _progressTimer?.cancel();

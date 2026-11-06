@@ -483,8 +483,24 @@ class _StatusLayer extends StatelessWidget {
                       onPressed: onRetry,
                     ),
                     PillButton(label: 'Back', onPressed: onBack),
+                    if (c.hardwareDecoding != HardwareDecoding.off)
+                      PillButton(
+                        label: 'Turn off hardware decoding',
+                        onPressed: () async {
+                          await c.setHardwareDecoding(HardwareDecoding.off);
+                          await onRetry();
+                        },
+                      ),
                   ],
                 ),
+                if (c.hardwareDecoding != HardwareDecoding.off)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      'If the picture never appears on this device, turning off hardware decoding often fixes it.',
+                      style: t.bodySmall?.copyWith(color: Colors.white70),
+                    ),
+                  ),
               ],
             ),
           ),

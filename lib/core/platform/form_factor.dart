@@ -13,6 +13,7 @@ class DeviceProfile {
     required this.formFactor,
     required this.liteMode,
     this.isFireTv = false,
+    this.isEmulator = false,
   });
 
   final FormFactor formFactor;
@@ -21,6 +22,10 @@ class DeviceProfile {
   /// smaller image caches.
   final bool liteMode;
   final bool isFireTv;
+
+  /// Android emulator / iOS simulator. Their hardware video decoders are
+  /// unreliable, so the player decodes in software there.
+  final bool isEmulator;
 
   bool get isTv => formFactor == FormFactor.tv;
 
@@ -95,6 +100,7 @@ Future<DeviceProfile> detectDeviceProfile({DeviceInfoPlugin? plugin}) async {
           ramMb: info.physicalRamSize,
         ),
         isFireTv: fire,
+        isEmulator: !info.isPhysicalDevice,
       );
     }
   } catch (e) {

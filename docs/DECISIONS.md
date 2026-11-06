@@ -203,3 +203,8 @@ Codes like 512 or 509 come from panels and firewalls rejecting a request, not fr
 - The Connection check's response step tries each identity in turn. If a different one works, it's saved for that provider.
 - When every identity is refused, the check shows a short excerpt of the provider's reply, with secrets and links removed.
 - The report now shows the masked host, port and scheme (the old line was being scrubbed as a link), the identities tried and their status codes, and whether the address has IPv4 and/or IPv6.
+
+### D57. Software decoding on emulators; first-frame watchdog
+Emulator logs showed the stream opening (video size known) while the emulator's hardware decoder (`c2.goldfish.h264.decoder`) dropped every frame. media_kit forces software decoding on emulators by itself, but only when the app doesn't pass `hwdec`; Lumen always passed `auto-safe`, which overrode that. "Auto" now means software (`hwdec=no`) on emulators and simulators (`isPhysicalDevice == false`), and `auto-safe` elsewhere.
+
+Separately, a stream whose playback position doesn't move within 25 s of opening counts as failed, which triggers retries and then an error screen, never an endless spinner. The error screen offers a one-tap "Turn off hardware decoding" (brief §7).

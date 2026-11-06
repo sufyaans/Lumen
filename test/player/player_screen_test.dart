@@ -283,4 +283,26 @@ void main() {
     expect(engine.opened, hasLength(1));
     expect(engine.opened.single.path, contains('/101.'));
   });
+
+  testWidgets('a failed stream offers to turn off hardware decoding', (
+    tester,
+  ) async {
+    final d = FakePlayerData(channels: channelList(3))
+      ..classify = const ConnectionError(
+        ConnectionErrorKind.maxConnections,
+        maxConnections: 1,
+      );
+    final r = await openPlayer(tester, const PlayRequest('live:1'), data: d);
+    r.engine.fail('decoder');
+    await settle(tester);
+    expect(find.text('Turn off hardware decoding'), findsOneWidget);
+    await tester.tap(find.text('Turn off hardware decoding'));
+    await settle(tester);
+    expect(r.engine.hw, HardwareDecoding.off);
+    expect(
+      r.engine.opened,
+      hasLength(2),
+      reason: 'retried with software decoding',
+    );
+  });
 }

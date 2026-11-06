@@ -40,23 +40,28 @@ Map<String, String> bufferingOptions(BufferingProfile p) => switch (p) {
 const liveReconnectOptions =
     'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=5';
 
-String hwdecValue(HardwareDecoding h) => switch (h) {
-  HardwareDecoding.auto => 'auto-safe',
+/// mpv `hwdec` for a setting. "Auto" means software decoding on emulators,
+/// whose hardware decoders accept streams but drop every frame.
+String hwdecValue(HardwareDecoding h, {bool emulator = false}) => switch (h) {
+  HardwareDecoding.auto => emulator ? 'no' : 'auto-safe',
   HardwareDecoding.on => 'auto',
   HardwareDecoding.off => 'no',
 };
 
 /// [PlaybackEngine] on media_kit (libmpv).
 class MediaKitEngine implements PlaybackEngine {
-  MediaKitEngine({HardwareDecoding hardwareDecoding = HardwareDecoding.auto})
-    : _player = Player(
-        configuration: const PlayerConfiguration(bufferSize: 32 * 1024 * 1024),
-      ) {
+  MediaKitEngine({
+    HardwareDecoding hardwareDecoding = HardwareDecoding.auto,
+    this.emulator = false,
+  }) : _player = Player(
+         configuration: const PlayerConfiguration(bufferSize: 32 * 1024 * 1024),
+       ) {
     _controller = VideoController(
       _player,
       configuration: VideoControllerConfiguration(
-        hwdec: hwdecValue(hardwareDecoding),
-        enableHardwareAcceleration: hardwareDecoding != HardwareDecoding.off,
+        hwdec: hwdecValue(hardwareDecoding, emulator: emulator),
+        enableHardwareAcceleration:
+            hwdecValue(hardwareDecoding, emulator: emulator) != 'no',
       ),
     );
     final s = _player.stream;
@@ -101,6 +106,9 @@ class MediaKitEngine implements PlaybackEngine {
   }
 
   final Player _player;
+
+  /// Running on an emulator (see [hwdecValue]).
+  final bool emulator;
   late final VideoController _controller;
   final _subs = <StreamSubscription<Object?>>[];
   final _states = StreamController<EngineState>.broadcast();
@@ -142,7 +150,7 @@ class MediaKitEngine implements PlaybackEngine {
     for (final e in bufferingOptions(buffering).entries) {
       await _set(e.key, e.value);
     }
-    await _set('hwdec', hwdecValue(hardwareDecoding));
+    await _set('hwdec', hwdecValue(hardwareDecoding, emulator: emulator));
   }
 
   @override
@@ -201,7 +209,7 @@ class MediaKitEngine implements PlaybackEngine {
 
   @override
   Future<void> setHardwareDecoding(HardwareDecoding mode) =>
-      _set('hwdec', hwdecValue(mode));
+      _set('hwdec', hwdecValue(mode, emulator: emulator));
 
   @override
   Widget view({required AspectMode aspect}) => Video(

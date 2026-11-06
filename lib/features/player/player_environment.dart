@@ -104,7 +104,10 @@ final playbackEnvironmentProvider = Provider<PlaybackEnvironment>(
 final playbackEngineFactoryProvider =
     Provider<PlaybackEngine Function(AppSettings)>(
       (ref) =>
-          (s) => MediaKitEngine(hardwareDecoding: s.hardwareDecoding),
+          (s) => MediaKitEngine(
+            hardwareDecoding: s.hardwareDecoding,
+            emulator: ref.read(deviceProfileProvider).isEmulator,
+          ),
     );
 
 final playerDataProvider = Provider<PlayerData>((ref) {

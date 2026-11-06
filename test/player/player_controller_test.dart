@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumen/core/network/connection_error.dart';
 import 'package:lumen/domain/media_summary.dart';
+import 'package:lumen/features/player/media_kit_engine.dart';
+import 'package:lumen/features/player/playback_engine.dart';
 import 'package:lumen/features/player/player_controller.dart';
 import 'package:lumen/features/player/player_data.dart';
 import 'package:lumen/features/settings/app_settings.dart';
@@ -13,6 +15,7 @@ PlayerController make(
   FakeEngine e,
   FakePlayerData d, {
   AppSettings settings = const AppSettings(),
+  Duration firstFrame = const Duration(seconds: 30),
 }) => PlayerController(
   engine: e,
   data: d,
@@ -24,6 +27,7 @@ PlayerController make(
   connectWindow: const Duration(seconds: 5),
   stallTimeout: ms * 80,
   numberTimeout: ms * 60,
+  firstFrameTimeout: firstFrame,
 );
 
 Future<void> wait(int millis) =>
@@ -314,5 +318,41 @@ void main() {
     expect(e.hw, HardwareDecoding.on);
     await c.setHardwareDecoding(HardwareDecoding.off);
     expect(e.hw, HardwareDecoding.off);
+  });
+
+  test('no picture within the first-frame timeout: retries, then fails (never spins forever)', () async {
+    final e = FakeEngine();
+    final c = make(
+      e,
+      FakePlayerData(channels: channelList(1)),
+      firstFrame: ms * 50,
+    );
+    await c.start(const PlayRequest('live:1'));
+    // The demuxer knows the size but the decoder never produces frames:
+    // position stays at zero.
+    e.emit(const EngineState(hasVideo: true, buffering: true));
+    await wait(500);
+    expect(e.opened.length, greaterThan(1), reason: 'retried');
+    expect(c.phase, PlayerPhase.failed);
+  });
+
+  test('moving playback cancels the first-frame watchdog', () async {
+    final e = FakeEngine();
+    final c = make(e, FakePlayerData(), firstFrame: ms * 50);
+    await c.start(const PlayRequest('movie:1'));
+    e.playingAt(
+      const Duration(seconds: 1),
+      duration: const Duration(minutes: 5),
+    );
+    await wait(120);
+    expect(e.opened, hasLength(1));
+    expect(c.phase, PlayerPhase.playing);
+  });
+
+  test('Auto decoding is software on emulators, hardware elsewhere', () {
+    expect(hwdecValue(HardwareDecoding.auto), 'auto-safe');
+    expect(hwdecValue(HardwareDecoding.auto, emulator: true), 'no');
+    expect(hwdecValue(HardwareDecoding.on, emulator: true), 'auto');
+    expect(hwdecValue(HardwareDecoding.off), 'no');
   });
 }
