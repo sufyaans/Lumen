@@ -208,3 +208,9 @@ Codes like 512 or 509 come from panels and firewalls rejecting a request, not fr
 Emulator logs showed the stream opening (video size known) while the emulator's hardware decoder (`c2.goldfish.h264.decoder`) dropped every frame. media_kit forces software decoding on emulators by itself, but only when the app doesn't pass `hwdec`; Lumen always passed `auto-safe`, which overrode that. "Auto" now means software (`hwdec=no`) on emulators and simulators (`isPhysicalDevice == false`), and `auto-safe` elsewhere.
 
 Separately, a stream whose playback position doesn't move within 25 s of opening counts as failed, which triggers retries and then an error screen, never an endless spinner. The error screen offers a one-tap "Turn off hardware decoding" (brief §7).
+
+### D58. Engine "errors" are not all fatal
+media_kit forwards every error-level libmpv log line (ffmpeg `tcp:` messages, including its own reconnect notices, plus `stream`, `vd` and `ad`) on its error stream. Lumen used to stop and reopen on any of them, which killed live streams that were playing fine, and the quick reopen could then collide with the provider's connection limit. Now an engine error is fatal only before the playback position has moved. After that, errors are logged as warnings, and a failure is detected when the position doesn't move for `stallTimeout` (15 s) while not paused by the user.
+
+### D59. The emulator isn't a valid video test target
+On the Android TV emulator, the hardware decoder drops every frame, and with software decoding libmpv's GPU output renders black. Audio frames reach Android's audio system, but the emulator may not pass sound through to the host. Video playback must be tested on a real phone, TV or iPad.

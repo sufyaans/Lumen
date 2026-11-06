@@ -149,14 +149,46 @@ void main() {
     });
   });
 
-  test('live stall counts as a failure and reconnects', () async {
+  test(
+    'position stuck after starting counts as a failure and reconnects',
+    () async {
+      final e = FakeEngine();
+      final c = make(e, FakePlayerData(channels: channelList(1)));
+      await c.start(const PlayRequest('live:1'));
+      e.playingAt(const Duration(seconds: 1));
+      e.emit(e.state.copyWith(buffering: true)); // position never moves again
+      await wait(200);
+      expect(e.opened.length, greaterThanOrEqualTo(2));
+    },
+  );
+
+  test('an engine warning while playing does not kill the stream', () async {
     final e = FakeEngine();
     final c = make(e, FakePlayerData(channels: channelList(1)));
     await c.start(const PlayRequest('live:1'));
-    e.playingAt(Duration.zero);
-    e.emit(e.state.copyWith(buffering: true));
-    await wait(140);
-    expect(e.opened.length, greaterThanOrEqualTo(2));
+    e.playingAt(const Duration(seconds: 1));
+    e.fail('tcp: Connection reset by peer'); // ffmpeg reconnect notice
+    for (var i = 2; i < 8; i++) {
+      await wait(30);
+      e.playingAt(Duration(seconds: i)); // still playing
+    }
+    expect(e.opened, hasLength(1), reason: 'never reopened');
+    expect(e.stops, 0);
+    expect(c.phase, PlayerPhase.playing);
+    expect(c.lastEngineWarning, contains('Connection reset'));
+  });
+
+  test('user pause does not count as a stall', () async {
+    final e = FakeEngine();
+    final c = make(e, FakePlayerData());
+    await c.start(const PlayRequest('movie:1'));
+    e.playingAt(
+      const Duration(seconds: 5),
+      duration: const Duration(minutes: 5),
+    );
+    await c.togglePlay();
+    await wait(250);
+    expect(e.opened, hasLength(1));
   });
 
   test(
@@ -340,11 +372,10 @@ void main() {
     final e = FakeEngine();
     final c = make(e, FakePlayerData(), firstFrame: ms * 50);
     await c.start(const PlayRequest('movie:1'));
-    e.playingAt(
-      const Duration(seconds: 1),
-      duration: const Duration(minutes: 5),
-    );
-    await wait(120);
+    for (var i = 1; i <= 6; i++) {
+      e.playingAt(Duration(seconds: i), duration: const Duration(minutes: 5));
+      await wait(20);
+    }
     expect(e.opened, hasLength(1));
     expect(c.phase, PlayerPhase.playing);
   });

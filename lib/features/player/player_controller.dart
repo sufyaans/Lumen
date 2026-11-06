@@ -91,13 +91,18 @@ class PlayerController extends ChangeNotifier {
   bool _disposed = false;
   bool _recovering = false;
   DateTime? _openedAt;
-  DateTime? _bufferingSince;
+  Duration _lastPos = Duration.zero;
+  DateTime _lastProgressAt = DateTime.now();
+  Timer? _progressWatch;
+  bool _userPaused = false;
+
+  /// The last non-fatal engine message (for diagnostics).
+  String? lastEngineWarning;
   Duration? _resumeAt;
   bool _gotVideo = false;
   Timer? _zapTimer;
   Timer? _numberTimer;
   Timer? _progressTimer;
-  Timer? _stallTimer;
   Timer? _firstFrameTimer;
   bool _moved = false;
   int _generation = 0;
@@ -141,7 +146,7 @@ class PlayerController extends ChangeNotifier {
     int source = 0,
   }) async {
     final gen = ++_generation;
-    _stallTimer?.cancel();
+    _progressWatch?.cancel();
     if (_hasOpen) {
       await _saveProgress();
       await engine.stop();
@@ -172,6 +177,27 @@ class PlayerController extends ChangeNotifier {
       NetLog.w('playback did not start within $firstFrameTimeout');
       unawaited(_onFailure(stalled: true));
     });
+    _lastPos = Duration.zero;
+    _lastProgressAt = _clock();
+    _userPaused = false;
+    _progressWatch?.cancel();
+    final period = Duration(
+      milliseconds: (stallTimeout.inMilliseconds ~/ 3).clamp(10, 2000),
+    );
+    _progressWatch = Timer.periodic(period, (_) {
+      if (_disposed ||
+          gen != _generation ||
+          !_moved ||
+          _userPaused ||
+          _recovering) {
+        return;
+      }
+      if (phase == PlayerPhase.failed || phase == PlayerPhase.ended) return;
+      if (_clock().difference(_lastProgressAt) > stallTimeout) {
+        NetLog.w('playback position stuck for $stallTimeout');
+        unawaited(_onFailure(stalled: true));
+      }
+    });
     opens++;
     await engine.open(next.sources[sourceIndex], start: start);
     if (next.isLive) unawaited(data.markWatched(next));
@@ -187,9 +213,23 @@ class PlayerController extends ChangeNotifier {
     final it = item;
     if (it == null || _disposed) return;
 
-    if (s.error != null && !_recovering && phase != PlayerPhase.failed) {
-      unawaited(_onFailure());
-      return;
+    // media_kit reports every error-level libmpv log line (a failed
+    // segment read, ffmpeg's own reconnect notices, decoder warnings) as an
+    // error. Only treat it as fatal before playback has started; once the
+    // position is moving, a real failure shows up as the position stalling.
+    if (s.error != null) {
+      if (!_moved && !_recovering && phase != PlayerPhase.failed) {
+        unawaited(_onFailure());
+        return;
+      }
+      if (s.error != lastEngineWarning) {
+        lastEngineWarning = s.error;
+        NetLog.w('player warning while playing (ignored): ${s.error}');
+      }
+    }
+    if (s.position != _lastPos) {
+      _lastPos = s.position;
+      _lastProgressAt = _clock();
     }
 
     if (s.position > Duration.zero && !_moved) {
@@ -210,21 +250,6 @@ class PlayerController extends ChangeNotifier {
         attempt = 0;
       }
       if (!it.isLive) unawaited(_checkSeekable());
-    }
-
-    // Live stall detection: buffering for too long counts as a failure.
-    if (it.isLive && s.buffering && _gotVideo) {
-      _bufferingSince ??= _clock();
-      _stallTimer ??= Timer(stallTimeout, () {
-        _stallTimer = null;
-        if (engine.state.buffering && !_recovering) {
-          unawaited(_onFailure(stalled: true));
-        }
-      });
-    } else if (!s.buffering) {
-      _bufferingSince = null;
-      _stallTimer?.cancel();
-      _stallTimer = null;
     }
 
     if (s.completed && !it.isLive && phase != PlayerPhase.ended) {
@@ -304,6 +329,7 @@ class PlayerController extends ChangeNotifier {
 
   void _fail(ConnectionError e) {
     _firstFrameTimer?.cancel();
+    _progressWatch?.cancel();
     error = e;
     phase = PlayerPhase.failed;
     _progressTimer?.cancel();
@@ -402,9 +428,12 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> togglePlay() async {
     if (engine.state.playing) {
+      _userPaused = true;
       await engine.pause();
       await _saveProgress();
     } else {
+      _userPaused = false;
+      _lastProgressAt = _clock();
       await engine.play();
     }
   }
@@ -457,6 +486,7 @@ class PlayerController extends ChangeNotifier {
       _hasOpen = false;
       _stoppedForBackground = true;
     } else {
+      _userPaused = true;
       await engine.pause();
     }
   }
@@ -482,7 +512,7 @@ class PlayerController extends ChangeNotifier {
     _zapTimer?.cancel();
     _numberTimer?.cancel();
     _progressTimer?.cancel();
-    _stallTimer?.cancel();
+    _progressWatch?.cancel();
     _firstFrameTimer?.cancel();
     await _saveProgress();
     if (_hasOpen) await engine.stop();
@@ -496,7 +526,7 @@ class PlayerController extends ChangeNotifier {
     _zapTimer?.cancel();
     _numberTimer?.cancel();
     _progressTimer?.cancel();
-    _stallTimer?.cancel();
+    _progressWatch?.cancel();
     unawaited(_sub.cancel());
     super.dispose();
   }
