@@ -9,9 +9,12 @@ import '../core/network/network_client.dart';
 import '../data/db/app_database.dart';
 import '../data/repo/catalog_repository.dart';
 import '../data/repo/provider_registry.dart';
+import '../data/repo/repository_browse_queries.dart';
 import '../data/secure/credential_store.dart';
 import '../data/sync/catalog_sync.dart';
+import '../dev/preview_browse_queries.dart';
 import '../domain/browse_catalog.dart';
+import '../domain/browse_queries.dart';
 import '../domain/content_filters.dart';
 import '../features/settings/app_settings.dart';
 
@@ -180,6 +183,38 @@ Stream<void> _debounce(Stream<void> s, Duration d) {
   return c.stream;
 }
 
+/// Data source for paged grids, detail, guide and search.
+final browseQueriesProvider = Provider<BrowseQueries>((ref) {
+  final providerId = ref.watch(activeProviderIdProvider);
+  if (providerId == null) {
+    // Debug preview, or nothing at all in release builds.
+    return PreviewBrowseQueries(ref.watch(browseCatalogProvider));
+  }
+  return RepositoryBrowseQueries(
+    repo: ref.watch(catalogRepositoryProvider),
+    providerId: providerId,
+    profileId: ref.watch(activeProfileIdProvider),
+    filter: ref.watch(contentFilterProvider),
+    store: ref.watch(credentialStoreProvider),
+    network: ref.watch(networkForProvider),
+  );
+});
+
+/// Increments when the catalogue changes, so paged screens reload.
+final catalogVersionProvider = StreamProvider<int>((ref) async* {
+  final providerId = ref.watch(activeProviderIdProvider);
+  var v = 0;
+  yield v;
+  if (providerId == null) return;
+  final repo = ref.watch(catalogRepositoryProvider);
+  await for (final _ in _debounce(
+    repo.watchChanges(),
+    const Duration(milliseconds: 600),
+  )) {
+    yield ++v;
+  }
+});
+
 // ---- Connectivity and offline state ------------------------------------------
 
 /// Connectivity as a hint only, never proof of reachability (brief 5.9).
@@ -255,6 +290,29 @@ class SyncController extends Notifier<SyncState> {
                 providerId: providerId,
                 progress: p,
                 lastResult: state.lastResult,
+              );
+            }
+          },
+        );
+    if (ref.mounted) state = SyncState(providerId: providerId, lastResult: r);
+    return r;
+  }
+
+  /// Imports a picked M3U file into [providerId] (brief 5.5).
+  Future<SyncResult?> importFile(String providerId, Uint8List bytes) async {
+    if (state.running) return null;
+    state = SyncState(running: true, providerId: providerId);
+    final r = await ref
+        .read(catalogSyncProvider)
+        .importM3uFile(
+          providerId,
+          bytes,
+          onProgress: (p) {
+            if (ref.mounted) {
+              state = SyncState(
+                running: true,
+                providerId: providerId,
+                progress: p,
               );
             }
           },

@@ -95,6 +95,9 @@ void main() {
     await pumpLumen(tester, formFactor: FormFactor.tablet);
     await tester.tap(find.bySemanticsLabel('Account').first);
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings').last);
+    await tester.tap(find.text('Settings').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Light'));
     await tester.pumpAndSettle();
     final ctx = tester.element(find.text('Appearance'));
@@ -112,11 +115,13 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Search').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'comedy');
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     expect(find.text('Preview Comedy'), findsOneWidget); // channel
     expect(find.text('Little Thunder'), findsOneWidget); // movie
     expect(find.text('Open Season'), findsOneWidget); // series
     await tester.enterText(find.byType(TextField), 'zzzz');
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     expect(find.textContaining('Nothing matches'), findsOneWidget);
   });

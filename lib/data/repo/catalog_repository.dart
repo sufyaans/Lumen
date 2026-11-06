@@ -220,7 +220,7 @@ class CatalogRepository {
 
   // ---- mapping to UI models ---------------------------------------------------
 
-  MediaSummary _channel(
+  MediaSummary mapChannel(
     ChannelRow c,
     Map<String, (EpgProgramRow, EpgProgramRow?)> epg,
     DateTime now,
@@ -250,7 +250,7 @@ class CatalogRepository {
     );
   }
 
-  MediaSummary _movie(MovieRow m, {double? progress}) => MediaSummary(
+  MediaSummary mapMovie(MovieRow m, {double? progress}) => MediaSummary(
     id: itemId(ContentKind.movie, m.remoteId),
     kind: MediaKind.movie,
     title: m.name,
@@ -259,7 +259,7 @@ class CatalogRepository {
     progress: progress,
   );
 
-  MediaSummary _series(SeriesRow s, {double? progress}) => MediaSummary(
+  MediaSummary mapSeries(SeriesRow s, {double? progress}) => MediaSummary(
     id: itemId(ContentKind.series, s.remoteId),
     kind: MediaKind.series,
     title: s.name,
@@ -271,7 +271,7 @@ class CatalogRepository {
     progress: progress,
   );
 
-  Future<List<MediaSummary>> _channelsWithEpg(
+  Future<List<MediaSummary>> channelsWithEpg(
     String providerId,
     List<ChannelRow> rows,
   ) async {
@@ -281,7 +281,7 @@ class CatalogRepository {
       rows.map((c) => c.epgId).whereType<String>(),
       now: now,
     );
-    return [for (final c in rows) _channel(c, epg, now)];
+    return [for (final c in rows) mapChannel(c, epg, now)];
   }
 
   // ---- browse snapshot ---------------------------------------------------------
@@ -310,7 +310,7 @@ class CatalogRepository {
 
     final live = await perCategory(
       liveCats,
-      (id) async => _channelsWithEpg(
+      (id) async => channelsWithEpg(
         providerId,
         await channelsPage(
           providerId,
@@ -329,7 +329,7 @@ class CatalogRepository {
           filter: filter,
           limit: rowLimit,
         ))
-          _movie(m),
+          mapMovie(m),
       ],
     );
     final series = await perCategory(
@@ -341,7 +341,7 @@ class CatalogRepository {
           filter: filter,
           limit: rowLimit,
         ))
-          _series(s),
+          mapSeries(s),
       ],
     );
 
@@ -368,7 +368,7 @@ class CatalogRepository {
             limit: 20,
             newestFirst: true,
           ))
-            _movie(m),
+            mapMovie(m),
         ],
       ),
       MediaRow(
@@ -380,12 +380,12 @@ class CatalogRepository {
             limit: 20,
             recentFirst: true,
           ))
-            _series(s),
+            mapSeries(s),
         ],
       ),
       MediaRow(
         title: 'Live now',
-        items: await _channelsWithEpg(
+        items: await channelsWithEpg(
           providerId,
           await channelsPage(providerId, filter: filter, limit: 12),
         ),
@@ -440,7 +440,7 @@ class CatalogRepository {
                 ))
                 .getSingleOrNull();
         if (m == null || (filter.hideAdult && m.isAdult)) continue;
-        out.add(_movie(m, progress: frac));
+        out.add(mapMovie(m, progress: frac));
       } else if (p.seriesId != null && seenSeries.add(p.seriesId!)) {
         final s =
             await (db.select(db.seriesTable)..where(
@@ -450,7 +450,7 @@ class CatalogRepository {
                 ))
                 .getSingleOrNull();
         if (s == null || (filter.hideAdult && s.isAdult)) continue;
-        out.add(_series(s, progress: frac));
+        out.add(mapSeries(s, progress: frac));
       }
       if (out.length >= limit) break;
     }
@@ -487,7 +487,7 @@ class CatalogRepository {
                       t.remoteId.equals(r.remoteId),
                 ))
                 .getSingleOrNull();
-        if (m != null && !(filter.hideAdult && m.isAdult)) out.add(_movie(m));
+        if (m != null && !(filter.hideAdult && m.isAdult)) out.add(mapMovie(m));
       } else {
         final s =
             await (db.select(db.seriesTable)..where(
@@ -496,7 +496,9 @@ class CatalogRepository {
                       t.remoteId.equals(r.remoteId),
                 ))
                 .getSingleOrNull();
-        if (s != null && !(filter.hideAdult && s.isAdult)) out.add(_series(s));
+        if (s != null && !(filter.hideAdult && s.isAdult)) {
+          out.add(mapSeries(s));
+        }
       }
     }
     return out;
@@ -518,7 +520,7 @@ class CatalogRepository {
         )
         .asyncMap((r) => db.channels.map(r.data))
         .get();
-    return _channelsWithEpg(providerId, rows);
+    return channelsWithEpg(providerId, rows);
   }
 
   Future<bool> toggleFavourite(
@@ -695,7 +697,7 @@ class CatalogRepository {
           (c) => c.categoryId,
         );
       }
-      for (final m in await _channelsWithEpg(providerId, chans)) {
+      for (final m in await channelsWithEpg(providerId, chans)) {
         items[m.id] = m;
       }
     }
@@ -716,7 +718,7 @@ class CatalogRepository {
         );
       }
       for (final m in ms) {
-        items[itemId(ContentKind.movie, m.remoteId)] = _movie(m);
+        items[itemId(ContentKind.movie, m.remoteId)] = mapMovie(m);
       }
     }
     final seriesIds = byKind[ContentKind.series] ?? const [];
@@ -737,7 +739,7 @@ class CatalogRepository {
         );
       }
       for (final s in ss) {
-        items[itemId(ContentKind.series, s.remoteId)] = _series(s);
+        items[itemId(ContentKind.series, s.remoteId)] = mapSeries(s);
       }
     }
     return [

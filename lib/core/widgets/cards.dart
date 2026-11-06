@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../app/theme.dart';
 import '../../domain/media_summary.dart';
 import '../focus/focusable_card.dart';
+import 'artwork.dart';
 import 'fallback_art.dart';
 
 /// Card sizes, mirroring the prototype's clamp() rules.
@@ -98,8 +99,10 @@ class PosterCard extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: width * 3 / 2,
-          child: FallbackArt(
+          child: Artwork(
             title: item.title,
+            url: item.imageUrl,
+            width: width,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -165,8 +168,10 @@ class WideCard extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: width * 9 / 16,
-          child: FallbackArt(
+          child: Artwork(
             title: item.title,
+            url: item.imageUrl,
+            width: width,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -250,18 +255,28 @@ class ChannelCard extends StatelessWidget {
                   borderRadius: _cardRadius,
                   child: SizedBox.square(
                     dimension: 42,
-                    child: FallbackArt(
-                      title: item.title,
-                      child: Center(
-                        child: Text(
-                          initials(item.title),
-                          style: t.labelMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+                    child: item.imageUrl == null
+                        ? FallbackArt(
+                            title: item.title,
+                            child: Center(
+                              child: Text(
+                                initials(item.title),
+                                style: t.labelMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          )
+                        : ColoredBox(
+                            color: c.surfaceHigh,
+                            child: Artwork(
+                              title: item.title,
+                              url: item.imageUrl,
+                              width: 42,
+                              fit: BoxFit.contain,
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 10),

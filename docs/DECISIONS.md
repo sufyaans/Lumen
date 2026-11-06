@@ -112,3 +112,45 @@ The guide is parsed with the `xml` package's event iterator inside the sync isol
 
 ### D33. Adult and kids detection
 Detection matches keywords on word boundaries, so "Essex" isn't adult. Adult categories are hidden by default (`AppSettings.hideAdult`; the PIN gate is Phase 3 UI). Kids profiles hide adult content and show only categories whose names look kids-appropriate.
+
+## Phase 3
+
+### D34. One data interface for the screens
+Paged grids, detail, guide and search read through `BrowseQueries`. `RepositoryBrowseQueries` serves the database for the active provider and profile. `PreviewBrowseQueries` serves the debug preview and widget tests, so widget tests never need SQLite or a network. Home's rows still come from the bounded snapshot (`browseCatalogProvider`).
+
+### D35. Every category is reachable
+The category chips list every visible provider category, not just the first 24. "All" shows the overview rows (up to 24 categories × 30 items, like Netflix). Choosing a category opens an infinite grid that loads 60 items at a time as you scroll or D-pad toward the end.
+
+### D36. Guide grid
+There is one horizontal scroll area for a fixed window (now −30 min … +6 h). Inside it, the programme rows are a vertically virtualised list, and the sticky channel column is a separate list whose scroll offset is kept in sync with them. Channels load 40 at a time. Horizontally, each row only lays out programmes inside the window, so the width is bounded and doesn't need a second virtualised axis. When a channel has no XMLTV data, `get_short_epg` is fetched only for channels on screen, at most 2 at a time, once per channel per session, and the result is stored.
+
+### D37. Channels open the player
+Opening a channel (card, guide cell or "Now" programme) will start the player in Phase 4. Until then it shows a short "playback arrives in the next update" message. Future programmes show their start time.
+
+### D38. First-run flow
+Terms lead to Add provider. Release builds then redirect every screen to Add provider until a provider exists; the router re-checks whenever the provider list changes. Debug builds also offer "Browse preview (debug)".
+
+### D39. Validating M3U providers
+An M3U link or file is validated by the first sync itself, so the playlist isn't downloaded twice. If that sync fails, the progress screen shows the classified error with Try again, Connection check and Change details. Change details removes a provider that has never completed a sync.
+
+### D40. Connection check
+The check runs DNS lookup, TCP connect, response, login and catalogue as separate steps, using `dart:io` and the app's network client. Playlist providers skip the login step. Test playback runs only when you tap it, because it uses a connection slot. The report masks the host, removes URLs, and redacts known secrets.
+
+### D41. Parental PIN
+The PIN is 4 digits, stored in secure storage, and created the first time someone changes "Hide adult categories". Kids profiles always hide adult content.
+
+### D42. Clear cache
+Clear cache removes artwork, the TV guide and cached episode lists, then marks providers for a refresh. Providers, favourites, My list and progress stay.
+
+### D43. Sign out
+As in the prototype, Sign out deactivates the current provider and keeps saved providers. Removing a provider asks for confirmation and deletes its catalogue, user data and secrets.
+
+### D44. Dialogs own their text controllers
+A test caught the PIN dialog's controller being disposed while the dialog was still animating closed. That crashes on a real device too. `TextPromptDialog` now owns and disposes its controller.
+
+### D45. Not in Phase 3
+Not built yet:
+- the player (Phase 4)
+- "Sign in from your phone" (stretch)
+- the catch-up UI (stretch; URL builder exists)
+- a "Recently watched channels" row (recents are stored but have no row yet)

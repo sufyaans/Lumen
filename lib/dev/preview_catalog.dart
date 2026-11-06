@@ -64,7 +64,7 @@ BrowseCatalog buildPreviewCatalog() {
   final chans = [
     for (final (i, c) in channels.indexed)
       MediaSummary(
-        id: 'channel:${c.$1}',
+        id: 'live:${c.$1}',
         kind: MediaKind.channel,
         title: c.$2,
         subtitle: c.$3,

@@ -3,12 +3,14 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/widgets/buttons.dart';
 import '../../domain/browse_catalog.dart';
+import '../../domain/media_summary.dart';
 import '../common/catalog_screen.dart';
+import 'guide_view.dart';
 
 enum LiveView { channels, guide }
 
-/// Live TV. Phase 0 has the Channels view; the virtualised Guide grid
-/// (brief section 10) lands in Phase 3.
+/// Live TV: Channels view (rows or a paged grid per category) and Guide
+/// view, sharing the category chips (brief section 3).
 class LiveScreen extends ConsumerStatefulWidget {
   const LiveScreen({super.key});
 
@@ -22,13 +24,13 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   Widget build(BuildContext context) {
     final c = ref.watch(browseCatalogProvider);
-    return CatalogScreen(
+    return CategoryBrowser(
+      kind: MediaKind.channel,
       title: 'Live TV',
-      rows: _view == LiveView.channels ? c.live : const [],
-      genres: c.liveCategories,
-      emptyMessage: _view == LiveView.guide
-          ? 'The TV guide arrives with programme data in a later build.'
-          : 'No channels yet. Add a provider in Account to see them here.',
+      allRows: c.live,
+      includeFavourites: true,
+      emptyMessage:
+          'No channels yet. Add a provider in Account to see them here.',
       headerTrailing: Segmented<LiveView>(
         options: const [
           (LiveView.channels, 'Channels'),
@@ -37,6 +39,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         value: _view,
         onChanged: (v) => setState(() => _view = v),
       ),
+      bodyBuilder: _view == LiveView.guide
+          ? (context, categoryId, favourites) => SliverToBoxAdapter(
+              child: GuideView(
+                categoryId: categoryId,
+                favouritesOnly: favourites,
+              ),
+            )
+          : null,
     );
   }
 }

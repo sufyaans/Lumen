@@ -1,15 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../app/data_providers.dart';
+import '../../core/focus/focus_memory.dart';
 import '../../core/focus/focusable_card.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/cards.dart';
 import '../../core/widgets/content_row.dart';
-import '../../domain/browse_catalog.dart';
 import '../../domain/media_summary.dart';
 import '../common/catalog_screen.dart';
 
-/// Global search. Phase 2 swaps the in-memory filter for FTS5.
+/// Global search across live, movies and series with instant results
+/// (FTS5 on the database; brief section 3).
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -19,30 +23,48 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
-  static const _limit = 60;
+  Timer? _debounce;
+  List<MediaSummary> _results = const [];
+  String _query = '';
+  bool _searching = false;
+  int _generation = 0;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
+  void _onChanged(String text) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 180), () => _run(text));
+  }
+
+  Future<void> _run(String text) async {
+    final q = text.trim();
+    final gen = ++_generation;
+    if (q.isEmpty) {
+      setState(() {
+        _query = '';
+        _results = const [];
+        _searching = false;
+      });
+      return;
+    }
+    setState(() => _searching = true);
+    final r = await ref.read(browseQueriesProvider).search(q);
+    if (!mounted || gen != _generation) return;
+    setState(() {
+      _query = q;
+      _results = r;
+      _searching = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final catalog = ref.watch(browseCatalogProvider);
-    final q = _controller.text.trim().toLowerCase();
-    final all = catalog.allItems.toList();
-    final results = q.isEmpty
-        ? const <MediaSummary>[]
-        : all
-              .where(
-                (i) =>
-                    i.title.toLowerCase().contains(q) ||
-                    i.subtitle.toLowerCase().contains(q),
-              )
-              .toList();
     final g = pageGutter(context);
-
     return Scaffold(
       body: SafeArea(
         child: CustomScrollView(
@@ -65,12 +87,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         // immediately (brief section 8).
                         child: TextField(
                           controller: _controller,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: _onChanged,
+                          onSubmitted: _run,
                           textInputAction: TextInputAction.search,
                           style: Theme.of(context).textTheme.titleLarge,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: 'Search channels, movies and shows',
-                            prefixIcon: Icon(Icons.search),
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _searching
+                                ? const Padding(
+                                    padding: EdgeInsets.all(14),
+                                    child: SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
                         ),
                       ),
@@ -79,36 +113,38 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
             ),
-            if (q.isEmpty)
+            if (_query.isEmpty)
               const SliverToBoxAdapter(
                 child: EmptyState(
                   message: 'Type a title, channel or genre to search.',
                 ),
               )
-            else if (results.isEmpty)
+            else if (_results.isEmpty)
               SliverToBoxAdapter(
                 child: EmptyState(
                   message:
-                      'Nothing matches "${_controller.text.trim()}". '
-                      'Try a title, channel or genre.',
+                      'Nothing matches "$_query". Try a title, channel or genre.',
                 ),
               )
             else
               SliverPadding(
                 padding: EdgeInsets.symmetric(horizontal: g, vertical: 16),
                 sliver: SliverToBoxAdapter(
-                  child: Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [
-                      for (final item in results.take(_limit))
-                        mediaCard(
-                          context,
-                          item,
-                          defaultStyleFor(item.kind),
-                          onPressed: () => openItem(context, item),
-                        ),
-                    ],
+                  child: FocusMemory(
+                    debugLabel: 'results',
+                    child: Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        for (final item in _results)
+                          mediaCard(
+                            context,
+                            item,
+                            defaultStyleFor(item.kind),
+                            onPressed: () => openItem(context, item),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),

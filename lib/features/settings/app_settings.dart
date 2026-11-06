@@ -22,6 +22,15 @@ bool isRefreshDue(DateTime? lastSync, RefreshPolicy policy, DateTime now) {
   };
 }
 
+/// Default live stream format (brief section 3).
+enum StreamFormat { auto, ts, hls }
+
+/// Live buffering profile; mapped to mpv cache settings in Phase 4.
+enum BufferingProfile { lowLatency, balanced, stable }
+
+/// Hardware decoding; "Off" is one tap away in the player (brief 7).
+enum HardwareDecoding { auto, on, off }
+
 /// Plain (non-secret) settings. Secrets never go here (brief section 5.8).
 @immutable
 class AppSettings {
@@ -31,6 +40,10 @@ class AppSettings {
     this.rotateForVideo = true,
     this.refreshPolicy = RefreshPolicy.onLaunch,
     this.hideAdult = true,
+    this.streamFormat = StreamFormat.auto,
+    this.buffering = BufferingProfile.balanced,
+    this.hardwareDecoding = HardwareDecoding.auto,
+    this.autoplayNextEpisode = true,
   });
 
   final ThemeMode themeMode;
@@ -40,6 +53,10 @@ class AppSettings {
 
   /// Adult categories hidden; changing it needs the PIN (Phase 3 UI).
   final bool hideAdult;
+  final StreamFormat streamFormat;
+  final BufferingProfile buffering;
+  final HardwareDecoding hardwareDecoding;
+  final bool autoplayNextEpisode;
 
   bool get termsAccepted => acceptedTermsVersion >= AppConfig.termsVersion;
 
@@ -49,14 +66,25 @@ class AppSettings {
     bool? rotateForVideo,
     RefreshPolicy? refreshPolicy,
     bool? hideAdult,
+    StreamFormat? streamFormat,
+    BufferingProfile? buffering,
+    HardwareDecoding? hardwareDecoding,
+    bool? autoplayNextEpisode,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     acceptedTermsVersion: acceptedTermsVersion ?? this.acceptedTermsVersion,
     rotateForVideo: rotateForVideo ?? this.rotateForVideo,
     refreshPolicy: refreshPolicy ?? this.refreshPolicy,
     hideAdult: hideAdult ?? this.hideAdult,
+    streamFormat: streamFormat ?? this.streamFormat,
+    buffering: buffering ?? this.buffering,
+    hardwareDecoding: hardwareDecoding ?? this.hardwareDecoding,
+    autoplayNextEpisode: autoplayNextEpisode ?? this.autoplayNextEpisode,
   );
 }
+
+T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) =>
+    values.firstWhere((e) => e.name == name, orElse: () => fallback);
 
 /// Overridden in main() with the loaded instance.
 final sharedPreferencesProvider = Provider<SharedPreferences>(
@@ -69,6 +97,10 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   static const _kRotate = 'settings.rotateForVideo';
   static const _kRefresh = 'settings.refreshPolicy';
   static const _kHideAdult = 'settings.hideAdult';
+  static const _kFormat = 'settings.streamFormat';
+  static const _kBuffer = 'settings.buffering';
+  static const _kHw = 'settings.hardwareDecoding';
+  static const _kAutoplay = 'settings.autoplayNext';
 
   SharedPreferences get _prefs => ref.read(sharedPreferencesProvider);
 
@@ -88,7 +120,43 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
         orElse: () => RefreshPolicy.onLaunch,
       ),
       hideAdult: p.getBool(_kHideAdult) ?? true,
+      streamFormat: _enumByName(
+        StreamFormat.values,
+        p.getString(_kFormat),
+        StreamFormat.auto,
+      ),
+      buffering: _enumByName(
+        BufferingProfile.values,
+        p.getString(_kBuffer),
+        BufferingProfile.balanced,
+      ),
+      hardwareDecoding: _enumByName(
+        HardwareDecoding.values,
+        p.getString(_kHw),
+        HardwareDecoding.auto,
+      ),
+      autoplayNextEpisode: p.getBool(_kAutoplay) ?? true,
     );
+  }
+
+  Future<void> setStreamFormat(StreamFormat v) async {
+    state = state.copyWith(streamFormat: v);
+    await _prefs.setString(_kFormat, v.name);
+  }
+
+  Future<void> setBuffering(BufferingProfile v) async {
+    state = state.copyWith(buffering: v);
+    await _prefs.setString(_kBuffer, v.name);
+  }
+
+  Future<void> setHardwareDecoding(HardwareDecoding v) async {
+    state = state.copyWith(hardwareDecoding: v);
+    await _prefs.setString(_kHw, v.name);
+  }
+
+  Future<void> setAutoplayNextEpisode(bool v) async {
+    state = state.copyWith(autoplayNextEpisode: v);
+    await _prefs.setBool(_kAutoplay, v);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {

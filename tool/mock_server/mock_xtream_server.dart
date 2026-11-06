@@ -113,10 +113,11 @@ class MockXtreamServer {
     MockProvider provider, {
     SecurityContext? tls,
     int port = 0,
+    InternetAddress? address,
   }) async {
     final server = await shelf_io.serve(
       (Request r) => _handle(r, provider),
-      InternetAddress.loopbackIPv4,
+      address ?? InternetAddress.loopbackIPv4,
       port,
       securityContext: tls,
     );

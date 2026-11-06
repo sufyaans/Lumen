@@ -71,7 +71,8 @@ void main() {
       await tester.pumpAndSettle();
       final r = await walkDpad(tester);
       expect(r.reached.any((id) => id.contains('Add provider')), isTrue);
-      expect(r.reached.any((id) => id.contains('Light')), isTrue);
+      expect(r.reached.any((id) => id.contains('Add profile')), isTrue);
+      expect(r.reached.any((id) => id.endsWith('/Settings')), isTrue);
       expectFullyNavigable(r, 'Account');
     });
 
@@ -90,21 +91,24 @@ void main() {
       tester,
     ) async {
       await pumpLumen(tester, formFactor: FormFactor.tv);
-      await press(tester, LogicalKeyboardKey.arrowDown);
+      // First row: Continue watching (a movie or series card).
       await press(tester, LogicalKeyboardKey.arrowDown);
       final card = FocusManager.instance.primaryFocus!;
       final cardId = focusId(card);
       await press(tester, LogicalKeyboardKey.select);
-      expect(find.text('Play'), findsOneWidget);
+      expect(find.text('My list'), findsOneWidget);
 
       final r = await walkDpad(tester);
-      expect(r.reached.any((id) => id.contains('Play')), isTrue);
+      expect(
+        r.reached.any((id) => id.contains('Resume') || id.contains('Play')),
+        isTrue,
+      );
       expect(r.reached.any((id) => id.contains('My list')), isTrue);
       expect(r.reached.any((id) => id.contains('Close')), isTrue);
       expectFullyNavigable(r, 'Detail');
 
       await press(tester, LogicalKeyboardKey.escape);
-      expect(find.text('Play'), findsNothing);
+      expect(find.text('My list'), findsNothing);
       expect(focusId(FocusManager.instance.primaryFocus!), cardId);
     });
 

@@ -1,12 +1,16 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumen/app/app.dart';
 import 'package:lumen/app/app_config.dart';
 import 'package:lumen/app/data_providers.dart';
 import 'package:lumen/core/platform/form_factor.dart';
+import 'package:lumen/data/db/app_database.dart';
+import 'package:lumen/dev/preview_browse_queries.dart';
 import 'package:lumen/dev/preview_catalog.dart';
 import 'package:lumen/domain/browse_catalog.dart';
+import 'package:lumen/domain/browse_queries.dart';
 import 'package:lumen/features/settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,6 +26,8 @@ Future<ProviderContainer> pumpLumen(
   BrowseCatalog? catalog,
   bool termsAccepted = true,
   Size? size,
+  BrowseQueries? queries,
+  List<Override> extraOverrides = const [],
 }) async {
   SharedPreferences.setMockInitialValues({
     if (termsAccepted) 'settings.termsVersion': AppConfig.termsVersion,
@@ -56,7 +62,22 @@ Future<ProviderContainer> pumpLumen(
       // No database, provider list or connectivity plugin in widget tests.
       providersListProvider.overrideWith((ref) => Stream.value(const [])),
       connectivityOnlineProvider.overrideWith((ref) => Stream.value(true)),
+      profilesProvider.overrideWith(
+        (ref) => Stream.value([
+          ProfileRow(
+            id: 1,
+            name: 'Me',
+            isKids: false,
+            colorIndex: 0,
+            createdAt: DateTime(2026),
+          ),
+        ]),
+      ),
+      browseQueriesProvider.overrideWithValue(
+        queries ?? PreviewBrowseQueries(catalog ?? buildPreviewCatalog()),
+      ),
       browseCatalogProvider.overrideWithValue(catalog ?? buildPreviewCatalog()),
+      ...extraOverrides,
     ],
   );
   addTearDown(container.dispose);
