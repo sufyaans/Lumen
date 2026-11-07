@@ -39,6 +39,16 @@ dart run tool/mock_server/main.dart
 
 This serves a fake Xtream provider at `http://127.0.0.1:25461` (username `user`, password `pass`). From an Android emulator, use `10.0.2.2:25461`. It contains invented data only.
 
+Every live channel, movie and episode plays a generated 2-minute test clip (Motion-JPEG video with a quiet beep every 5 seconds, served with byte ranges so seeking and resume work). It's built at startup from `tool/mock_server/test_clip.dart`, so there's no video file in the repo and FFmpeg isn't needed.
+
+## End-to-end smoke test
+
+```bash
+flutter test integration_test/smoke_test.dart -d emulator-5554
+```
+
+This runs on a connected device or emulator. It starts the mock provider inside the test, types the server details into Add provider, waits for the first sync, opens a movie, plays it, leaves, and checks that Resume continues from the saved position. It uses its own database and in-memory credentials, so it doesn't touch the installed app's data.
+
 ## Running
 
 **Android phone emulator:** create a Pixel device in Android Studio's Device Manager, start it, then:
@@ -103,12 +113,27 @@ Free Apple ID limits:
 |---|---|
 | Display name used in code | `lib/app/app_config.dart` → `AppConfig.appName` |
 | Android label | `android/app/src/main/AndroidManifest.xml` → `android:label` |
-| Android ID | `android/app/build.gradle.kts` → `namespace` and `applicationId`; also move `android/app/src/main/kotlin/com/example/lumen/MainActivity.kt` to the matching package folder and update its `package` line |
+| Android ID | `android/app/build.gradle.kts` → `namespace` and `applicationId`; also move `android/app/src/main/kotlin/app/lumen/player/MainActivity.kt` to the matching package folder and update its `package` line |
 | iOS display name | `ios/Runner/Info.plist` → `CFBundleDisplayName`, `CFBundleName` |
-| iOS bundle ID | `ios/Runner.xcodeproj/project.pbxproj` → every `PRODUCT_BUNDLE_IDENTIFIER = com.example.lumen` |
+| iOS bundle ID | `ios/Runner.xcodeproj/project.pbxproj` → every `PRODUCT_BUNDLE_IDENTIFIER = app.lumen.player` |
 | TV banner | `android/app/src/main/res/drawable-xhdpi/tv_banner.png` (320×180) |
 
-Also update the placeholders in `AppConfig.androidApplicationId` and `AppConfig.iosBundleId`.
+Also update `AppConfig.androidApplicationId` and `AppConfig.iosBundleId`. The current ID is `app.lumen.player` on both platforms. Changing it makes a new app on devices: uninstall the old one first, and its saved providers and history are not carried over.
+
+App icon, TV banner and splash images all come from `tool/branding/generate_icons.py` (needs Pillow). Edit the design there and re-run it from the project root.
+
+## Release signing
+
+Release builds are signed with the key named in `android/key.properties` (gitignored):
+
+```
+storePassword=...
+keyPassword=...
+keyAlias=lumen
+storeFile=../lumen-release.jks
+```
+
+`storeFile` is relative to `android/app`. Without that file, release builds fall back to the debug key. **Back up the keystore and its password somewhere safe (a password manager):** if they are lost, updates to an installed or published app can no longer be signed. With Google Play App Signing, this key is the upload key and can be reset through Play Console.
 
 ## Project layout
 

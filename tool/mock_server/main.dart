@@ -7,12 +7,14 @@
 import 'dart:io';
 
 import 'mock_xtream_server.dart';
+import 'test_clip.dart';
 
 Future<void> main() async {
   // Listens on all interfaces so a phone on the same Wi-Fi can reach it.
   final server = await MockXtreamServer.start(
     MockProvider()
       ..liveStreamCount = 120
+      ..videoClip = buildTestClip()
       ..categoryCount = 6
       ..categoryNames = [
         'News',

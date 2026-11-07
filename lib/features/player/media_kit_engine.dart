@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -54,7 +55,11 @@ class MediaKitEngine implements PlaybackEngine {
     HardwareDecoding hardwareDecoding = HardwareDecoding.auto,
     this.emulator = false,
   }) : _player = Player(
-         configuration: const PlayerConfiguration(bufferSize: 32 * 1024 * 1024),
+         configuration: const PlayerConfiguration(
+           bufferSize: 32 * 1024 * 1024,
+           // Debug builds print libmpv warnings to the console (logcat).
+           logLevel: kDebugMode ? MPVLogLevel.warn : MPVLogLevel.error,
+         ),
        ) {
     _controller = VideoController(
       _player,
@@ -65,6 +70,13 @@ class MediaKitEngine implements PlaybackEngine {
       ),
     );
     final s = _player.stream;
+    if (kDebugMode) {
+      _subs.add(
+        s.log.listen(
+          (l) => debugPrint('mpv ${l.level} ${l.prefix}: ${l.text}'),
+        ),
+      );
+    }
     _subs.addAll([
       s.playing.listen((v) => _emit(_state.copyWith(playing: v))),
       s.buffering.listen((v) => _emit(_state.copyWith(buffering: v))),

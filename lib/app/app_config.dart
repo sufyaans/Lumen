@@ -7,8 +7,8 @@ abstract final class AppConfig {
   static const String appName = 'Lumen';
 
   /// Placeholder IDs. Change them before publishing anywhere.
-  static const String androidApplicationId = 'com.example.lumen';
-  static const String iosBundleId = 'com.example.lumen';
+  static const String androidApplicationId = 'app.lumen.player';
+  static const String iosBundleId = 'app.lumen.player';
 
   /// Keep in sync with `version:` in pubspec.yaml.
   static const String version = '1.0.0';

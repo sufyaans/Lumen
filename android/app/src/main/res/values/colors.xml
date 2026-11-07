@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lumen background (#0C0C10), used behind the splash and while Flutter starts. -->
+    <color name="splash_background">#0C0C10</color>
+</resources>

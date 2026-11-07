@@ -270,6 +270,25 @@ void main() {
     },
   );
 
+  test('recently watched channels row, newest first', () async {
+    final sub = c.listen(syncControllerProvider, (_, _) {});
+    final r = await c
+        .read(signInServiceProvider)
+        .xtream(server: '${server.base}', username: 'user', password: 'pass');
+    final id = (r as SignInOk).providerId;
+    await until(
+      () => c.read(syncControllerProvider),
+      (s) => !s.running && s.lastResult != null,
+    );
+    final repo = c.read(catalogRepositoryProvider);
+    await repo.addRecent(1, id, 'live', '2');
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    await repo.addRecent(1, id, 'live', '5');
+    final recent = await repo.recentChannels(id, 1);
+    expect(recent.map((e) => e.title), ['Channel 5', 'Channel 2']);
+    sub.close();
+  });
+
   test('parseItemId', () {
     expect(parseItemId('live:12'), (MediaKind.channel, '12'));
     expect(parseItemId('channel:12'), (MediaKind.channel, '12'));

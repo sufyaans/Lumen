@@ -1,3 +1,14 @@
+import java.util.Properties
+
+// Release signing: android/key.properties (gitignored) points at the upload
+// keystore. Without it, release builds fall back to the debug key so
+// `flutter run --release` still works on a fresh checkout.
+val keyProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKey = keyProperties.getProperty("storeFile") != null
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -5,7 +16,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.lumen"
+    namespace = "app.lumen.player"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,8 +26,8 @@ android {
     }
 
     defaultConfig {
-        // Placeholder ID. Rename steps are in README.md ("Renaming the app").
-        applicationId = "com.example.lumen"
+        // Rename steps are in README.md ("Renaming the app").
+        applicationId = "app.lumen.player"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Flutter 3.47 requires API 24+ (see docs/DECISIONS.md).
@@ -30,11 +41,20 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keyProperties.getProperty("storeFile"))
+                storePassword = keyProperties.getProperty("storePassword")
+                keyAlias = keyProperties.getProperty("keyAlias")
+                keyPassword = keyProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
             // R8 (brief section 10). Re-verify playback and parsing in release.
             isMinifyEnabled = true
             isShrinkResources = true

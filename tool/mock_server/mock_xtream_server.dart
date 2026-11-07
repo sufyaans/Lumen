@@ -94,6 +94,11 @@ class MockProvider {
   /// A body to serve at `/playlist.m3u` (bytes, for encoding tests).
   Uint8List? playlist;
 
+  /// A real video (see `test_clip.dart`) served for every live, movie and
+  /// episode stream, with HTTP range support so seeking and resume work.
+  /// Null serves a few placeholder bytes (enough for the connection tests).
+  Uint8List? videoClip;
+
   final requests = <RecordedRequest>[];
   int _inFlight = 0;
   int maxInFlight = 0;
@@ -232,11 +237,47 @@ Response _stream(Request r, MockProvider p, List<String> segs) {
         r.requestedUri.replace(path: '/token/abc123/${segs[3]}', query: null),
       );
     case StreamMode.normal:
+      final clip = p.videoClip;
+      if (clip != null) return _ranged(r, clip, 'video/x-msvideo');
       return Response.ok(
         Uint8List.fromList(List.filled(8192, 0x47)),
         headers: {'content-type': 'video/mp2t'},
       );
   }
+}
+
+/// Serves [bytes] honouring a single `Range: bytes=a-b` request.
+Response _ranged(Request r, Uint8List bytes, String type) {
+  final m = RegExp(r'bytes=(\d*)-(\d*)').firstMatch(r.headers['range'] ?? '');
+  final headers = {'content-type': type, 'accept-ranges': 'bytes'};
+  if (m == null) {
+    return Response.ok(
+      bytes,
+      headers: {...headers, 'content-length': '${bytes.length}'},
+    );
+  }
+  var start = int.tryParse(m[1]!) ?? 0;
+  var end = int.tryParse(m[2]!) ?? bytes.length - 1;
+  if (m[1]!.isEmpty && m[2]!.isNotEmpty) {
+    start = bytes.length - end; // suffix range: last N bytes
+    end = bytes.length - 1;
+  }
+  if (start >= bytes.length || start > end) {
+    return Response(
+      416,
+      headers: {...headers, 'content-range': 'bytes */${bytes.length}'},
+    );
+  }
+  if (end >= bytes.length) end = bytes.length - 1;
+  return Response(
+    206,
+    body: Uint8List.sublistView(bytes, start, end + 1),
+    headers: {
+      ...headers,
+      'content-range': 'bytes $start-$end/${bytes.length}',
+      'content-length': '${end - start + 1}',
+    },
+  );
 }
 
 Object? _num(MockProvider p, Object? v) =>

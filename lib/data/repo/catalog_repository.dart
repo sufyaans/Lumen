@@ -42,6 +42,7 @@ class CatalogRepository {
           db.favourites,
           db.myList,
           db.progress,
+          db.recents,
         ]),
       )
       .map((_) {});
@@ -356,6 +357,10 @@ class CatalogRepository {
         items: await myList(providerId, profileId, filter: filter),
       ),
       MediaRow(
+        title: 'Recently watched channels',
+        items: await recentChannels(providerId, profileId, filter: filter),
+      ),
+      MediaRow(
         title: 'Favourite channels',
         items: await favouriteChannels(providerId, profileId, filter: filter),
       ),
@@ -604,6 +609,31 @@ class CatalogRepository {
           'ORDER BY f.added_at DESC LIMIT 60',
           variables: [Variable(profileId), Variable(providerId)],
           readsFrom: {db.favourites, db.channels},
+        )
+        .asyncMap((r) => db.channels.map(r.data))
+        .get();
+    return channelsWithEpg(providerId, rows);
+  }
+
+  /// Live channels this profile played, most recent first.
+  Future<List<MediaSummary>> recentChannels(
+    String providerId,
+    int profileId, {
+    ContentFilter filter = ContentFilter.standard,
+    int limit = 20,
+  }) async {
+    final rows = await db
+        .customSelect(
+          'SELECT c.* FROM recents r JOIN channels c ON c.provider_id = r.provider_id '
+          'AND c.remote_id = r.remote_id WHERE r.profile_id = ? AND r.provider_id = ? '
+          "AND r.kind = 'live' ${filter.hideAdult || filter.kidsOnly ? 'AND c.is_adult = 0' : ''} "
+          'ORDER BY r.at DESC LIMIT ?',
+          variables: [
+            Variable(profileId),
+            Variable(providerId),
+            Variable(limit),
+          ],
+          readsFrom: {db.recents, db.channels},
         )
         .asyncMap((r) => db.channels.map(r.data))
         .get();

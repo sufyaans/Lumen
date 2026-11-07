@@ -1,4 +1,4 @@
-package com.example.lumen
+package app.lumen.player
 
 import io.flutter.embedding.android.FlutterActivity
 
